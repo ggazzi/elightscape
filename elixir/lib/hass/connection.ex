@@ -53,6 +53,16 @@ defmodule Hass.Connection do
     end
   end
 
+  def subscribe_trigger(conn, trigger) do
+    id =
+      GenServer.call(conn, {:subscription, self(), %{type: :subscribe_trigger, trigger: trigger}})
+
+    receive do
+      {:hass, ^id, {:ok, _}} -> {:ok, id}
+      {:hass, ^id, {:error, e}} -> {:error, e}
+    end
+  end
+
   ## GenServer Callbacks
 
   defmodule State do
@@ -224,12 +234,8 @@ defmodule Hass.Connection do
 
   def process_msg(msg) do
     case msg do
-      %{
-        "type" => "event",
-        "event" => %{"data" => data, "time_fired" => time_fired, "event_type" => event_type}
-      } ->
-        {:ok, time_fired, _offset} = DateTime.from_iso8601(time_fired)
-        {:event, event_type, time_fired, data}
+      %{"type" => "event", "event" => event} ->
+        {:event, event}
 
       %{"type" => "result", "error" => error} ->
         {:error, error}
