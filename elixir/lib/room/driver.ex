@@ -4,30 +4,26 @@ defmodule Room.Controller do
 
   ## Client API
 
-  def start(hass, opts) do
-    GenServer.start(__MODULE__, hass, opts)
+  def start([hass, name | opts]) do
+    GenServer.start(__MODULE__, {hass, name}, opts)
   end
 
-  def start_link(hass, opts) do
-    GenServer.start_link(__MODULE__, hass, opts)
+  def start_link([hass, name | opts]) do
+    GenServer.start_link(__MODULE__, {hass, name}, opts)
   end
 
   ## Server Callbacks
 
-  @triggers [
-    # {%{:platform => :state, entity_id: "sensor.bedroom_remote_action", to: nil}, :toggle}
-    {{InputDriver.Ikea5Btn, ["sensor.bedroom_remote_action"]}, nil}
-  ]
-
-  def child_spec([hass | opts]) do
-    %{id: __MODULE__, start: {__MODULE__, :start_link, [hass, opts]}}
-  end
-
-  def init(hass) do
+  def init({hass, name}) do
     {:ok, machine} = Room.StateMachine.start_link([])
 
+    trigger_spec = [
+      # {%{:platform => :state, entity_id: "sensor.bedroom_remote_action", to: nil}, :toggle}
+      {{InputDriver.Ikea5Btn, ["sensor.#{name}_remote_action"]}, nil}
+    ]
+
     triggers =
-      for {trigger, handler} <- @triggers, into: %{} do
+      for {trigger, handler} <- trigger_spec, into: %{} do
         sub = prepare_subscription(hass, trigger)
 
         actual_handler =
@@ -50,7 +46,8 @@ defmodule Room.Controller do
        machine: machine,
        triggers: triggers,
        hass: hass,
-       light: "light.bedroom_light_ceiling_retro"
+       scene_on: "scene.#{name}_normal_night",
+       scene_off: "scene.#{name}_off"
      }}
   end
 
@@ -86,15 +83,16 @@ defmodule Room.Controller do
   end
 
   defp handle_response({:set_lights, on}, state) do
-    service =
+    scene =
       if on do
-        "turn_on"
+        state.scene_on
       else
-        "turn_off"
+        state.scene_off
       end
 
     Task.start(fn ->
-      Hass.Connection.call_service(state.hass, "light", service, target: %{entity_id: state.light})
+      {:ok, _} =
+        Hass.Connection.call_service(state.hass, :scene, :turn_on, target: %{entity_id: scene})
     end)
   end
 

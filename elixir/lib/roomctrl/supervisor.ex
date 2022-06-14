@@ -10,7 +10,8 @@ defmodule RoomCtrl.Supervisor do
   def init(config) do
     children = [
       {Hass.Connection, [config[:hass], name: :hass]},
-      {Room.Controller, [:hass]}
+      Supervisor.child_spec({Room.Controller, [:hass, "bedroom"]}, id: :room_bedroom),
+      Supervisor.child_spec({Room.Controller, [:hass, "living"]}, id: :room_living)
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
