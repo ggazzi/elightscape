@@ -17,7 +17,10 @@ defmodule RoomCtrl.Supervisor do
            [
              name: "bedroom",
              # trigger: {%{:platform => :state, entity_id: "sensor.bedroom_remote_action", to: nil}, :toggle},
-             input: {InputDriver.Ikea5Btn, ["sensor.bedroom_remote_action"], nil}
+             input: {InputDriver.Ikea5Btn, ["sensor.bedroom_remote_action"], nil},
+             input:
+               {InputDriver.IkeaMotionSensor, ["binary_sensor.bedroom_motion_door_occupancy"],
+                nil}
            ]
          ]},
         id: :room_bedroom
@@ -26,7 +29,20 @@ defmodule RoomCtrl.Supervisor do
         {Room.Controller,
          [
            :hass,
-           [name: "living", input: {InputDriver.Ikea5Btn, ["sensor.living_remote_action"], nil}]
+           [
+             name: "living",
+             #  sensor_timeout: 1_000,
+             input: {InputDriver.Ikea5Btn, ["sensor.living_remote_action"], nil},
+             input:
+               {InputDriver.IkeaMotionSensor, ["binary_sensor.living_motion_dining_occupancy"],
+                nil},
+             input:
+               {InputDriver.IkeaMotionSensor, ["binary_sensor.living_motion_entrance_occupancy"],
+                nil},
+             input:
+               {InputDriver.IkeaMotionSensor, ["binary_sensor.living_motion_kitchen_occupancy"],
+                nil}
+           ]
          ]},
         id: :room_living
       )
