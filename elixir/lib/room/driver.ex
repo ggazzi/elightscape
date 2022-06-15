@@ -14,23 +14,18 @@ defmodule Room.Controller do
 
   ## Server Callbacks
 
-  def init({hass, name}) do
+  def init({hass, config}) do
     {:ok, machine} = Room.StateMachine.start_link([])
 
-    trigger_spec = [
-      # trigger: {%{:platform => :state, entity_id: "sensor.bedroom_remote_action", to: nil}, :toggle},
-      input: {InputDriver.Ikea5Btn, ["sensor.#{name}_remote_action"], nil}
-    ]
+    name = config[:name]
 
     triggers =
-      for {:trigger, {trigger, handler}} <- trigger_spec, into: %{} do
-        IO.inspect({trigger, handler})
+      for {:trigger, {trigger, handler}} <- config, into: %{} do
         {prepare_trigger(hass, trigger), prepare_handler(handler)}
       end
 
     triggers =
-      for {:input, {module, args, handler}} <- trigger_spec, into: triggers do
-        IO.inspect({module, args, handler})
+      for {:input, {module, args, handler}} <- config, into: triggers do
         {prepare_input(hass, module, args), prepare_handler(handler)}
       end
 
