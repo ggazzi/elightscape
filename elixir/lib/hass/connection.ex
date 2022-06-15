@@ -202,13 +202,8 @@ defmodule Hass.Connection do
   end
 
   @impl true
-  def handle_info({:gun_ws, pid, ref, {:text, data}}, state) do
-    unless {pid, ref} == state.connection do
-      Logger.warn(
-        "Unexpected connection #{inspect({pid, ref})}, expected #{inspect(state.connection)}"
-      )
-    end
-
+  def handle_info({:gun_ws, pid, ref, {:text, data}}, state)
+      when {pid, ref} == state.connection do
     msg = JSON.decode!(data)
     id = msg["id"]
 
@@ -225,6 +220,21 @@ defmodule Hass.Connection do
         send(pid, {:hass, id, process_msg(msg)})
         {:noreply, state}
     end
+  end
+
+  def handle_info({:gun_ws, pid, ref, {:close, n, text}}, state)
+      when {pid, ref} == state.connection do
+    {:stop, {:websocket_closed, n, text}}
+  end
+
+  def handle_info({:gun_ws, pid, ref, {:close, text}}, state)
+      when {pid, ref} == state.connection do
+    {:stop, {:websocket_closed, text}}
+  end
+
+  def handle_info({:gun_down, pid, _protocol, reason, _killed_streams}, state)
+      when pid == elem(state.connection, 0) do
+    {:stop, {:websocket_closed, reason}}
   end
 
   def handle_info(unexpected, state) do
