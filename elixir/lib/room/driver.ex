@@ -15,7 +15,7 @@ defmodule Room.Controller do
   ## Server Callbacks
 
   def init({hass, config}) do
-    {:ok, machine} = Room.StateMachine.start_link([])
+    {:ok, machine} = Room.StateMachine.start_link([self(), config])
 
     name = config[:name]
 
@@ -62,6 +62,11 @@ defmodule Room.Controller do
     {:hass, sub_id}
   end
 
+  def handle_info({Room.StateMachine, response}, state) do
+    handle_response(response, state)
+    {:noreply, state}
+  end
+
   def handle_info({module, id, event}, state) do
     sub = {module, id}
 
@@ -75,10 +80,9 @@ defmodule Room.Controller do
 
       handler ->
         message = handler.(event)
-        response = Room.StateMachine.send_event(state.machine, message)
-        Logger.info(fn -> "[#{inspect(sub)}] #{inspect(message)} / #{inspect(response)}" end)
+        Room.StateMachine.send_event(state.machine, message)
+        Logger.info(fn -> "[#{inspect(sub)}] #{inspect(message)}" end)
         Logger.debug(fn -> "[#{inspect(sub)}] #{inspect(event)}" end)
-        handle_response(response, state)
         {:noreply, state}
     end
   end
