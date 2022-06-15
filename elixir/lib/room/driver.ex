@@ -18,27 +18,20 @@ defmodule Room.Controller do
     {:ok, machine} = Room.StateMachine.start_link([])
 
     trigger_spec = [
-      # {%{:platform => :state, entity_id: "sensor.bedroom_remote_action", to: nil}, :toggle}
-      {{InputDriver.Ikea5Btn, ["sensor.#{name}_remote_action"]}, nil}
+      # trigger: {%{:platform => :state, entity_id: "sensor.bedroom_remote_action", to: nil}, :toggle},
+      input: {InputDriver.Ikea5Btn, ["sensor.#{name}_remote_action"], nil}
     ]
 
     triggers =
-      for {trigger, handler} <- trigger_spec, into: %{} do
-        sub = prepare_subscription(hass, trigger)
+      for {:trigger, {trigger, handler}} <- trigger_spec, into: %{} do
+        IO.inspect({trigger, handler})
+        {prepare_trigger(hass, trigger), prepare_handler(handler)}
+      end
 
-        actual_handler =
-          cond do
-            is_function(handler) ->
-              handler
-
-            handler == nil ->
-              fn x -> x end
-
-            true ->
-              fn _ -> handler end
-          end
-
-        {sub, actual_handler}
+    triggers =
+      for {:input, {module, args, handler}} <- trigger_spec, into: triggers do
+        IO.inspect({module, args, handler})
+        {prepare_input(hass, module, args), prepare_handler(handler)}
       end
 
     {:ok,
@@ -51,12 +44,25 @@ defmodule Room.Controller do
      }}
   end
 
-  defp prepare_subscription(hass, {module, opts}) do
+  defp prepare_handler(handler) do
+    cond do
+      is_function(handler) ->
+        handler
+
+      handler == nil ->
+        fn x -> x end
+
+      true ->
+        fn _ -> handler end
+    end
+  end
+
+  defp prepare_input(hass, module, opts) do
     {:ok, pid} = module.start_link([hass, self() | opts])
     {module, pid}
   end
 
-  defp prepare_subscription(hass, trigger) do
+  defp prepare_trigger(hass, trigger) do
     {:ok, {:hass, sub_id}} = Hass.Connection.subscribe_trigger(hass, trigger)
     {:hass, sub_id}
   end
