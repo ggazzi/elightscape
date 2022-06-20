@@ -28,8 +28,11 @@ defmodule Roomctrl.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:gun, "~> 2.0.0-rc.2"},
+      {:gun, "~> 2.0.0-rc.2", override: true},
       {:json, "~> 1.4"},
+      {:emqtt, github: "emqx/emqtt", tag: "1.6.0"},
+      {:cowlib, "~> 2.11.0",
+       env: :prod, hex: "cowlib", repo: "hexpm", optional: false, override: true},
       {:propcheck, "~> 1.4", only: [:test, :dev]}
     ]
   end

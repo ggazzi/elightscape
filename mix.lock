@@ -1,5 +1,10 @@
 %{
   "cowlib": {:hex, :cowlib, "2.11.0", "0b9ff9c346629256c42ebe1eeb769a83c6cb771a6ee5960bd110ab0b9b872063", [:make, :rebar3], [], "hexpm", "2b3e9da0b21c4565751a6d4901c20d1b4cc25cbb7fd50d91d2ab6dd287bc86a9"},
+  "emqtt": {:git, "https://github.com/emqx/emqtt.git", "51c809ff9081bde73d7996d7d40472789c4038b6", [tag: "1.6.0"]},
+  "getopt": {:hex, :getopt, "1.0.2", "33d9b44289fe7ad08627ddfe1d798e30b2da0033b51da1b3a2d64e72cd581d02", [:rebar3], [], "hexpm", "a0029aea4322fb82a61f6876a6d9c66dc9878b6cb61faa13df3187384fd4ea26"},
   "gun": {:hex, :gun, "2.0.0-rc.2", "7c489a32dedccb77b6e82d1f3c5a7dadfbfa004ec14e322cdb5e579c438632d2", [:make, :rebar3], [{:cowlib, "2.11.0", [hex: :cowlib, repo: "hexpm", optional: false]}], "hexpm", "6b9d1eae146410d727140dbf8b404b9631302ecc2066d1d12f22097ad7d254fc"},
   "json": {:hex, :json, "1.4.1", "8648f04a9439765ad449bc56a3ff7d8b11dd44ff08ffcdefc4329f7c93843dfa", [:mix], [], "hexpm", "9abf218dbe4ea4fcb875e087d5f904ef263d012ee5ed21d46e9dbca63f053d16"},
+  "libgraph": {:hex, :libgraph, "0.13.3", "20732b7bafb933dcf7351c479e03076ebd14a85fd3202c67a1c197f4f7c2466b", [:mix], [], "hexpm", "78f2576eef615440b46f10060b1de1c86640441422832052686df53dc3c148c6"},
+  "propcheck": {:hex, :propcheck, "1.4.1", "c12908dbe6f572032928548089b34ff9d40672d5d70f1562e3a9e9058d226cc9", [:mix], [{:libgraph, "~> 0.13", [hex: :libgraph, repo: "hexpm", optional: false]}, {:proper, "~> 1.4", [hex: :proper, repo: "hexpm", optional: false]}], "hexpm", "e1b088f574785c3c7e864da16f39082d5599b3aaf89086d3f9be6adb54464b19"},
+  "proper": {:hex, :proper, "1.4.0", "89a44b8c39d28bb9b4be8e4d715d534905b325470f2e0ec5e004d12484a79434", [:rebar3], [], "hexpm", "18285842185bd33efbda97d134a5cb5a0884384db36119fee0e3cfa488568cbb"},
 }
