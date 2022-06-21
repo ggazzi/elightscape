@@ -20,13 +20,10 @@ defmodule Room.Controller do
     name = config[:name]
 
     triggers =
-      for {:trigger, {trigger, handler}} <- config, into: %{} do
-        {prepare_trigger(hass, trigger), prepare_handler(handler)}
-      end
-
-    triggers =
-      for {:input, {module, args, handler}} <- config, into: triggers do
-        {prepare_input(mqtt, module, args), prepare_handler(handler)}
+      for {:input, {module, opts, handler}} <- config, into: %{} do
+        opts = [mqtt, self() | opts]
+        {pid, ref} = prepare_input(module, opts)
+        {pid, {prepare_handler(handler), ref, {module, opts}}}
       end
 
     {:ok,
@@ -53,14 +50,11 @@ defmodule Room.Controller do
     end
   end
 
-  defp prepare_input(mqtt, module, opts) do
-    {:ok, pid} = module.start([mqtt | opts])
-    {module, pid}
-  end
+  defp prepare_input(module, opts) do
+    {:ok, pid} = module.start(opts)
+    ref = Process.monitor(pid)
 
-  defp prepare_trigger(hass, trigger) do
-    {:ok, {:hass, sub_id}} = Hass.Connection.subscribe_trigger(hass, trigger)
-    {:hass, sub_id}
+    {pid, ref}
   end
 
   def handle_info({Room.StateMachine, response}, state) do
@@ -68,23 +62,33 @@ defmodule Room.Controller do
     {:noreply, state}
   end
 
-  def handle_info({module, id, event}, state) do
-    sub = {module, id}
-
-    case state.triggers[sub] do
+  def handle_info({module, pid, event}, state) do
+    case state.triggers[pid] do
       nil ->
-        Logger.warn(fn -> "[#{inspect(sub)}] unknown subscription #{inspect(event)}" end)
-        exit(:foo)
-
-        Logger.debug(fn -> "[#{inspect(sub)}] #{inspect(event)}" end)
+        Logger.warn(fn -> "[#{inspect(pid)}] unknown subscription #{inspect(event)}" end)
         {:noreply, state}
 
-      handler ->
+      {handler, _, _} ->
         message = handler.(event)
         Room.StateMachine.send_event(state.machine, message)
-        Logger.info(fn -> "[#{inspect(sub)}] #{inspect(message)}" end)
-        Logger.debug(fn -> "[#{inspect(sub)}] #{inspect(event)}" end)
+        Logger.info(fn -> "[#{inspect(pid)}] #{inspect(message)}" end)
+        Logger.debug(fn -> "[#{inspect(pid)}] #{inspect(event)}" end)
         {:noreply, state}
+    end
+  end
+
+  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
+    case state.triggers[pid] do
+      nil ->
+        {:noreply, state}
+
+      {handler, ^ref, {module, opts}} ->
+        {new_pid, new_ref} = prepare_input(module, opts)
+
+        triggers =
+          Map.put(Map.delete(state.triggers, pid), new_pid, {handler, new_ref, {module, opts}})
+
+        {:noreply, %{state | triggers: triggers}}
     end
   end
 

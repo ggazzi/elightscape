@@ -4,18 +4,22 @@ defmodule InputDriver.Ikea5Btn do
 
   ## Client API
 
-  def start([mqtt, entity_id | opts]) do
-    GenServer.start(__MODULE__, {mqtt, entity_id, self()}, opts)
+  def start([mqtt, subscriber, entity_id | opts]) do
+    GenServer.start(__MODULE__, {mqtt, subscriber, entity_id}, opts)
   end
 
-  def start_link([mqtt, entity_id | opts]) do
-    GenServer.start_link(__MODULE__, {mqtt, entity_id, self()}, opts)
+  def start_link([mqtt, subscriber, entity_id | opts]) do
+    GenServer.start_link(__MODULE__, {mqtt, subscriber, entity_id}, opts)
   end
 
   ## GenServer Callbacks
 
+  # def child_spec(opts) do
+  #   %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}}
+  # end
+
   @impl true
-  def init({mqtt, entity_id, subscriber}) do
+  def init({mqtt, subscriber, entity_id}) do
     topic = "zigbee2mqtt/#{entity_id}/action"
 
     case Mqtt.subscribe(mqtt, [{topic, []}]) do
