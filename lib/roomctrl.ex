@@ -12,11 +12,15 @@ defmodule RoomCtrl do
   end
 
   def connect do
-    connect(hass_config())
+    connect(config())
   end
 
   def connect(config) do
-    RoomCtrl.Supervisor.start_link([hass: config], name: RoomCtrl.Supervisor)
+    RoomCtrl.Supervisor.start_link(config, name: RoomCtrl.Supervisor)
+  end
+
+  defp config do
+    [hass: hass_config(), mqtt: Application.fetch_env!(:roomctrl, :mqtt)]
   end
 
   defp hass_config do

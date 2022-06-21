@@ -4,17 +4,17 @@ defmodule Room.Controller do
 
   ## Client API
 
-  def start([hass, name | opts]) do
-    GenServer.start(__MODULE__, {hass, name}, opts)
+  def start([hass, mqtt, config | opts]) do
+    GenServer.start(__MODULE__, {hass, mqtt, config}, opts)
   end
 
-  def start_link([hass, name | opts]) do
-    GenServer.start_link(__MODULE__, {hass, name}, opts)
+  def start_link([hass, mqtt, config | opts]) do
+    GenServer.start_link(__MODULE__, {hass, mqtt, config}, opts)
   end
 
   ## Server Callbacks
 
-  def init({hass, config}) do
+  def init({hass, mqtt, config}) do
     {:ok, machine} = Room.StateMachine.start_link([self(), config])
 
     name = config[:name]
@@ -26,7 +26,7 @@ defmodule Room.Controller do
 
     triggers =
       for {:input, {module, args, handler}} <- config, into: triggers do
-        {prepare_input(hass, module, args), prepare_handler(handler)}
+        {prepare_input(mqtt, module, args), prepare_handler(handler)}
       end
 
     {:ok,
@@ -34,7 +34,8 @@ defmodule Room.Controller do
        machine: machine,
        triggers: triggers,
        hass: hass,
-       scene_on: "scene.#{name}_normal_night",
+       mqtt: mqtt,
+       scene_on: "scene.#{name}_low_day",
        scene_off: "scene.#{name}_off"
      }}
   end
@@ -52,8 +53,8 @@ defmodule Room.Controller do
     end
   end
 
-  defp prepare_input(hass, module, opts) do
-    {:ok, pid} = module.start_link([hass, self() | opts])
+  defp prepare_input(mqtt, module, opts) do
+    {:ok, pid} = module.start([mqtt | opts])
     {module, pid}
   end
 

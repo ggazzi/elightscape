@@ -4,31 +4,42 @@ defmodule InputDriver.IkeaMotionSensor do
 
   ## Client API
 
-  def start([hass, subscriber, entity_id | opts]) do
-    GenServer.start(__MODULE__, {hass, entity_id, subscriber}, opts)
+  def start([mqtt, entity_id | opts]) do
+    GenServer.start(__MODULE__, {mqtt, entity_id, self()}, opts)
   end
 
-  def start_link([hass, subscriber, entity_id | opts]) do
-    GenServer.start_link(__MODULE__, {hass, entity_id, subscriber}, opts)
+  def start_link([mqtt, entity_id | opts]) do
+    GenServer.start_link(__MODULE__, {mqtt, entity_id, self()}, opts)
   end
 
   ## GenServer Callbacks
 
   @impl true
-  def init({hass, entity_id, subscriber}) do
-    {:ok, id} =
-      Hass.Connection.subscribe_trigger(hass, %{platform: :state, entity_id: entity_id, to: nil})
+  def init({mqtt, entity_id, subscriber}) do
+    topic = "zigbee2mqtt/#{entity_id}"
 
-    {:ok, %{subscriber: subscriber, hass_sub: id, entity_id: entity_id}}
+    case Mqtt.subscribe(mqtt, [{topic, []}]) do
+      {:ok, _props, _reason_codes} ->
+        ref = Process.monitor(mqtt)
+        {:ok, %{subscriber: subscriber, topic: topic, entity_id: entity_id, mqtt: {ref, mqtt}}}
+
+      {:error, reason} ->
+        {:stop, reason}
+    end
   end
 
   @impl true
-  def handle_info({:hass, id, {:event, event}}, state) when id == state.hass_sub do
-    if event["variables"]["trigger"]["to_state"]["attributes"]["occupancy"] do
+  def handle_info({:mqtt, topic, payload}, state) when topic == state.topic do
+    if JSON.decode!(payload)["occupancy"] do
       Logger.debug(fn -> "[#{state.entity_id}] detected motion" end)
       send(state.subscriber, {__MODULE__, self(), :sensor_active})
     end
 
     {:noreply, state}
+  end
+
+  def handle_info({:DOWN, ref, :process, _which, reason}, state)
+      when ref == elem(state.mqtt, 0) do
+    {:stop, {:mqtt_down, reason}, state}
   end
 end

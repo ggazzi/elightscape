@@ -105,9 +105,9 @@ defmodule Hass.Connection do
         {config[:host], config[:port], "/api/websocket"}
       end
 
-    Logger.info(fn -> "Opening http connection to #{inspect(host)}:#{port}" end)
+    Logger.debug(fn -> "Opening connection to home assistant on #{inspect(host)}:#{port}" end)
 
-    case :gun.open(host, port) do
+    case :gun.open(host, port, %{transport: :tcp}) do
       {:error, e} ->
         {:error, {:cannot_open, {host, port}, e}}
 
@@ -116,12 +116,15 @@ defmodule Hass.Connection do
           {:error, e} ->
             {:error, {:cannot_open, {host, port}, e}}
 
-          {:ok, _protocol} ->
-            Logger.info(fn -> "Upgrading to websocket at #{inspect(host)}:#{port}#{path}" end)
+          {:ok, protocol} ->
+            Logger.debug(fn ->
+              "Upgrading to websocket at #{inspect(protocol)}://#{inspect(host)}:#{port}#{path}"
+            end)
+
             stream_ref = :gun.ws_upgrade(conn_pid, path)
 
             receive do
-              {:gun_upgrade, ^conn_pid, ^stream_ref, [<<"websocket">>], _headers} ->
+              {:gun_upgrade, ^conn_pid, ^stream_ref, ["websocket"], _headers} ->
                 {:ok, {conn_pid, stream_ref}}
 
               {:gun_response, ^conn_pid, _, _, status, headers} ->
@@ -144,11 +147,11 @@ defmodule Hass.Connection do
         config[:token]
       end
 
-    Logger.info(fn -> "Waiting for 'auth_required'" end)
+    Logger.debug("Waiting for auth_required message from home assistant")
 
     case receive_auth_required({conn_pid, stream_ref}) do
       :ok ->
-        Logger.info(fn -> "Authenticating with home assistant" end)
+        Logger.debug("Sending auth message to home assistant")
         auth_msg = JSON.encode!(%{"type" => "auth", "access_token" => token})
         :gun.ws_send(conn_pid, stream_ref, {:text, auth_msg})
 
@@ -158,7 +161,7 @@ defmodule Hass.Connection do
 
             case data["type"] do
               "auth_ok" ->
-                Logger.info(fn -> "Authenticated to home assistant, communication now active" end)
+                Logger.debug("Authentication to home assistant complete")
                 {:ok, data["ha_version"]}
 
               "auth_invalid" ->
