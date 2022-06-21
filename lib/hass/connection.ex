@@ -66,11 +66,12 @@ defmodule Hass.Connection do
   ## GenServer Callbacks
 
   defmodule State do
-    defstruct [:connection, :last_id, :handlers]
+    defstruct [:connection, :last_id, :handlers, :monitor_ref]
     @type handler_type :: :command
     @type handler :: {handler_type, pid}
     @type t :: %State{
             connection: {pid, reference},
+            monitor_ref: reference,
             last_id: non_neg_integer,
             handlers: Handler.t()
           }
@@ -86,13 +87,19 @@ defmodule Hass.Connection do
       {:error, e} ->
         {:stop, e}
 
-      {:ok, {conn_pid, stream_ref}} ->
+      {:ok, {conn_pid, conn_ref, stream_ref}} ->
         case auth({conn_pid, stream_ref}, config) do
           {:error, e} ->
             {:stop, e}
 
           {:ok, _version} ->
-            {:ok, %State{connection: {conn_pid, stream_ref}, last_id: 0, handlers: %{}}}
+            {:ok,
+             %State{
+               connection: {conn_pid, stream_ref},
+               monitor_ref: conn_ref,
+               last_id: 0,
+               handlers: %{}
+             }}
         end
     end
   end
@@ -112,6 +119,8 @@ defmodule Hass.Connection do
         {:error, {:cannot_open, {host, port}, e}}
 
       {:ok, conn_pid} ->
+        conn_ref = Process.monitor(conn_pid)
+
         case :gun.await_up(conn_pid) do
           {:error, e} ->
             {:error, {:cannot_open, {host, port}, e}}
@@ -125,7 +134,7 @@ defmodule Hass.Connection do
 
             receive do
               {:gun_upgrade, ^conn_pid, ^stream_ref, ["websocket"], _headers} ->
-                {:ok, {conn_pid, stream_ref}}
+                {:ok, {conn_pid, conn_ref, stream_ref}}
 
               {:gun_response, ^conn_pid, _, _, status, headers} ->
                 {:error, {:ws_upgrade_failed, {host, port, path}, {:http, status, headers}}}
@@ -245,6 +254,11 @@ defmodule Hass.Connection do
 
   def handle_info({:gun_down, pid, _protocol, reason, _killed_streams}, state)
       when pid == elem(state.connection, 0) do
+    {:stop, {:websocket_closed, reason}}
+  end
+
+  def handle_info({:DOWN, ref, :process, pid, reason}, state)
+      when ref == state.monitor_ref and pid == elem(state.connection, 0) do
     {:stop, {:websocket_closed, reason}}
   end
 

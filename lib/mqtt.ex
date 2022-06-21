@@ -23,7 +23,7 @@ defmodule Mqtt do
 
   ## GenServer Callbacks
 
-  defstruct [:pid, :props, :subs]
+  defstruct [:pid, :props, :subs, :pids]
 
   def child_spec([config | opts]) do
     %{id: __MODULE__, start: {__MODULE__, :start_link, [config, opts]}}
@@ -37,8 +37,11 @@ defmodule Mqtt do
 
       {:ok, pid} ->
         case :emqtt.connect(pid) do
-          {:error, reason} -> {:stop, reason}
-          {:ok, properties} -> {:ok, %__MODULE__{pid: pid, props: properties, subs: Table.new()}}
+          {:error, reason} ->
+            {:stop, reason}
+
+          {:ok, properties} ->
+            {:ok, %__MODULE__{pid: pid, props: properties, subs: Table.new(), pids: %{}}}
         end
     end
   end
@@ -67,6 +70,22 @@ defmodule Mqtt do
     {:noreply, state}
   end
 
+  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
+    case state.pids[pid] do
+      nil ->
+        {:noreply, state}
+
+      {_ref, topics} ->
+        subs =
+          for topic <- topics, reduce: state.subs do
+            subs -> Table.unsubscribe(subs, pid, topic)
+          end
+
+        pids = Map.delete(state.pids, pid)
+        {:noreply, %{state | pids: pids, subs: subs}}
+    end
+  end
+
   @impl true
   def handle_call({:subscribe, properties, topics}, {from, _id}, state) do
     case :emqtt.subscribe(state.pid, properties, topics) do
@@ -74,17 +93,25 @@ defmodule Mqtt do
         {:reply, {:error, reason}, state}
 
       {:ok, props, reason_codes} ->
-        subs =
-          for {topic, _subopt} <- topics, into: state.subs do
-            {from, parse_topic(topic)}
+        topics = for {topic, _subopt} <- topics, do: parse_topic(topic)
+        subs = for topic <- topics, into: state.subs, do: {from, topic}
+
+        pids =
+          case state.pids[from] do
+            nil ->
+              ref = Process.monitor(from)
+              Map.put(state.pids, from, {ref, topics})
+
+            {ref, old_topics} ->
+              Map.put(state.pids, from, {ref, topics ++ old_topics})
           end
 
-        {:reply, {:ok, props, reason_codes}, %{state | subs: subs}}
+        {:reply, {:ok, props, reason_codes}, %{state | subs: subs, pids: pids}}
     end
   end
 
   @impl true
-  def handle_call({:unsubscribe, properties, topics}, from, state) do
+  def handle_call({:unsubscribe, properties, topics}, {from, _id}, state) do
     case :emqtt.subscribe(state.pid, properties, topics) do
       {:error, reason} ->
         {:reply, {:error, reason}, state}
@@ -95,7 +122,9 @@ defmodule Mqtt do
             subs -> Table.unsubscribe(subs, from, parse_topic(topic))
           end
 
-        {:reply, {:ok, props, reason_codes}, %{state | subs: subs}}
+        pids = Map.delete(state.pids, from)
+
+        {:reply, {:ok, props, reason_codes}, %{state | subs: subs, pids: pids}}
     end
   end
 
