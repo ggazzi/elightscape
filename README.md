@@ -1,21 +1,12 @@
-# Roomctrl
+# RoomCtrl
 
-**TODO: Add description**
+This is a controller for smart lights, based on the idea of having multiple rooms, each with a given set of scenes.
+It is meant to integrate with Home Assistant and Zigbee2MQTT (the latter serving only for inputs).
 
-## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `roomctrl` to your list of dependencies in `mix.exs`:
+## Behaviour
 
-```elixir
-def deps do
-  [
-    {:roomctrl, "~> 0.1.0"}
-  ]
-end
-```
+### IKEA Controllers
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/roomctrl](https://hexdocs.pm/roomctrl).
-
+- Toggle button: the behaviour will vary according to the current (visible) state and the number of clicks
+  - When clicked once: if the lights are currently on, they are turned definitively off; if the lights are turned off, they are turned on with a timeout
