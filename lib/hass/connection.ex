@@ -105,6 +105,8 @@ defmodule Hass.Connection do
         {config[:host], config[:port], "/api/websocket"}
       end
 
+    Logger.info(fn -> "Opening http connection to #{inspect(host)}:#{port}" end)
+
     case :gun.open(host, port) do
       {:error, e} ->
         {:error, {:cannot_open, {host, port}, e}}
@@ -115,6 +117,7 @@ defmodule Hass.Connection do
             {:error, {:cannot_open, {host, port}, e}}
 
           {:ok, _protocol} ->
+            Logger.info(fn -> "Upgrading to websocket at #{inspect(host)}:#{port}#{path}" end)
             stream_ref = :gun.ws_upgrade(conn_pid, path)
 
             receive do
@@ -141,8 +144,11 @@ defmodule Hass.Connection do
         config[:token]
       end
 
+    Logger.info(fn -> "Waiting for 'auth_required'" end)
+
     case receive_auth_required({conn_pid, stream_ref}) do
       :ok ->
+        Logger.info(fn -> "Authenticating with home assistant" end)
         auth_msg = JSON.encode!(%{"type" => "auth", "access_token" => token})
         :gun.ws_send(conn_pid, stream_ref, {:text, auth_msg})
 
@@ -152,6 +158,7 @@ defmodule Hass.Connection do
 
             case data["type"] do
               "auth_ok" ->
+                Logger.info(fn -> "Authenticated to home assistant, communication now active" end)
                 {:ok, data["ha_version"]}
 
               "auth_invalid" ->
@@ -192,7 +199,7 @@ defmodule Hass.Connection do
   def handle_call({hdl_type, pid, msg}, _target, state) do
     id = state.last_id + 1
     msg = JSON.encode!(Map.put(msg, :id, id))
-    Logger.info("Sending: #{msg}")
+    Logger.debug(fn -> "Sending: #{msg}" end)
 
     {conn_pid, stream_ref} = state.connection
     :gun.ws_send(conn_pid, stream_ref, {:text, msg})
@@ -204,12 +211,13 @@ defmodule Hass.Connection do
   @impl true
   def handle_info({:gun_ws, pid, ref, {:text, data}}, state)
       when {pid, ref} == state.connection do
+    Logger.debug(fn -> "received: #{data}" end)
     msg = JSON.decode!(data)
     id = msg["id"]
 
     case state.handlers[id] do
       nil ->
-        Logger.info("Unknown handler for message: #{inspect(msg)}")
+        Logger.warn(fn -> "Unknown handler for message: #{inspect(msg)}" end)
         {:noreply, state}
 
       {:command, pid} ->
@@ -238,7 +246,7 @@ defmodule Hass.Connection do
   end
 
   def handle_info(unexpected, state) do
-    Logger.warn("Unexpected message: #{inspect(unexpected)}")
+    Logger.warn(fn -> "Unexpected message: #{inspect(unexpected)}" end)
     {:noreply, state}
   end
 

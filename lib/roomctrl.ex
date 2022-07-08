@@ -4,8 +4,11 @@ defmodule RoomCtrl do
 
   @impl true
   def start(_type, _args) do
-    RoomCtrl.connect()
-    {:ok, self()}
+    case RoomCtrl.connect() do
+      {:ok, _} -> {:ok, self()}
+      {:error, e} -> {:error, e}
+      :ignore -> {:error, :ignore}
+    end
   end
 
   def connect do
