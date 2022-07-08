@@ -1,5 +1,5 @@
 # Ignore package tarball (built via "mix hex.build").
-roomctrl-*.tar
+elightscape-*.tar
 
 
 /_build

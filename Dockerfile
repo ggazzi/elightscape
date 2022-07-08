@@ -15,13 +15,13 @@ RUN mix local.rebar --force
 RUN mix deps.get
 RUN mix release
 
-RUN mv /build/_build/prod/rel/roomctrl /app
+RUN mv /build/_build/prod/rel/elightscape /app
 
 
 FROM elixir:${ELIXIR_VERSION}
 
 COPY --from=build /app /app
-RUN useradd roomctrl
-USER roomctrl
-ENTRYPOINT [ "/app/bin/roomctrl" ]
+RUN useradd elightscape
+USER elightscape
+ENTRYPOINT [ "/app/bin/elightscape" ]
 CMD [ "start" ]

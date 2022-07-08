@@ -1,9 +1,9 @@
-defmodule Roomctrl.MixProject do
+defmodule Elightscape.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :roomctrl,
+      app: :elightscape,
       version: "0.1.0",
       elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
@@ -15,7 +15,7 @@ defmodule Roomctrl.MixProject do
   def application do
     [
       extra_applications: [:logger, :gun],
-      mod: {RoomCtrl, []},
+      mod: {Elightscape, []},
       env: [
         hass_plugin: true,
         hass_host: "localhost",

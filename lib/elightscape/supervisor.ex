@@ -1,4 +1,4 @@
-defmodule RoomCtrl.Supervisor do
+defmodule Elightscape.Supervisor do
   use Supervisor
   require Logger
 
