@@ -18,7 +18,7 @@ defmodule RoomCtrl.Supervisor do
            :mqtt,
            [
              name: "bedroom",
-             input: {InputDriver.Ikea.RemoteTradfri, ["remote_bedroom"], nil},
+             input: {InputDriver.Ikea.RemoteStyrbar, ["remote_bedroom"], nil},
              input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_bedroom_shelves"], nil}
            ]
          ]},
@@ -46,7 +46,7 @@ defmodule RoomCtrl.Supervisor do
            :mqtt,
            [
              name: "bathroom",
-             input: {InputDriver.Ikea.RemoteTradfri, ["remote_bathroom"], nil},
+             input: {InputDriver.Ikea.RemoteStyrbar, ["remote_bathroom"], nil},
              input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_bathroom"], nil}
            ]
          ]},

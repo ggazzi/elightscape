@@ -62,6 +62,18 @@ defmodule Room.StateMachine do
     end
   end
 
+  def react_to_event({:on, :click}, state) do
+    %{
+      state
+      | lights_on: true,
+        listening_to_sensor: state.listening_to_sensor or not state.lights_on
+    }
+  end
+
+  def react_to_event({:off, :click}, state) do
+    %{state | lights_on: false, listening_to_sensor: false}
+  end
+
   def react_to_event(:always_on, state) do
     %{state | lights_on: true, listening_to_sensor: false}
   end
