@@ -23,28 +23,35 @@ defmodule RoomCtrl.Supervisor do
            ]
          ]},
         id: :room_bedroom
+      ),
+      Supervisor.child_spec(
+        {Room.Controller,
+         [
+           :hass,
+           :mqtt,
+           [
+             name: "living",
+             input: {InputDriver.Ikea5Btn, ["remote_living"], nil},
+             input: {InputDriver.IkeaMotionSensor, ["motion_entrance"], nil},
+             input: {InputDriver.IkeaMotionSensor, ["motion_dining"], nil},
+             input: {InputDriver.IkeaMotionSensor, ["motion_kitchen"], nil}
+           ]
+         ]},
+        id: :room_living
+      ),
+      Supervisor.child_spec(
+        {Room.Controller,
+         [
+           :hass,
+           :mqtt,
+           [
+             name: "bathroom",
+             input: {InputDriver.Ikea5Btn, ["remote_bathroom"], nil},
+             input: {InputDriver.IkeaMotionSensor, ["motion_bathroom"], nil}
+           ]
+         ]},
+        id: :room_bathroom
       )
-      # Supervisor.child_spec(
-      #   {Room.Controller,
-      #    [
-      #      :hass,
-      #      [
-      #        name: "living",
-      #        #  sensor_timeout: 1_000,
-      #        input: {InputDriver.Ikea5Btn, ["sensor.living_remote_action"], nil},
-      #        input:
-      #          {InputDriver.IkeaMotionSensor, ["binary_sensor.living_motion_dining_occupancy"],
-      #           nil},
-      #        input:
-      #          {InputDriver.IkeaMotionSensor, ["binary_sensor.living_motion_entrance_occupancy"],
-      #           nil},
-      #        input:
-      #          {InputDriver.IkeaMotionSensor, ["binary_sensor.living_motion_kitchen_occupancy"],
-      #           nil}
-      #      ]
-      #    ]},
-      #   id: :room_living
-      # )
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

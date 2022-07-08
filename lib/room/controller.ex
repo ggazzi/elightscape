@@ -32,7 +32,7 @@ defmodule Room.Controller do
        triggers: triggers,
        hass: hass,
        mqtt: mqtt,
-       scene_on: "scene.#{name}_low_day",
+       scene_on: "scene.#{name}_high_night",
        scene_off: "scene.#{name}_off"
      }}
   end

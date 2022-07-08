@@ -20,7 +20,8 @@ defmodule InputDriver.Ikea5Btn do
 
   @impl true
   def init({mqtt, subscriber, entity_id}) do
-    topic = "zigbee2mqtt/#{entity_id}/action"
+    # FIXME: remove hardcoded MQTT topic prefix
+    topic = "zigbee/#{entity_id}/action"
 
     case Mqtt.subscribe(mqtt, [{topic, []}]) do
       {:ok, _props, _reason_codes} ->
