@@ -1,4 +1,4 @@
-defmodule InputDriver.Ikea5Btn do
+defmodule InputDriver.Ikea.RemoteTradfri do
   use GenServer
   require Logger
 
@@ -13,10 +13,6 @@ defmodule InputDriver.Ikea5Btn do
   end
 
   ## GenServer Callbacks
-
-  # def child_spec(opts) do
-  #   %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}}
-  # end
 
   @impl true
   def init({mqtt, subscriber, entity_id}) do

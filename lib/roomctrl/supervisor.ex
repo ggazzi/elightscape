@@ -18,8 +18,8 @@ defmodule RoomCtrl.Supervisor do
            :mqtt,
            [
              name: "bedroom",
-             input: {InputDriver.Ikea5Btn, ["remote_bedroom"], nil},
-             input: {InputDriver.IkeaMotionSensor, ["motion_bedroom_shelves"], nil}
+             input: {InputDriver.Ikea.RemoteTradfri, ["remote_bedroom"], nil},
+             input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_bedroom_shelves"], nil}
            ]
          ]},
         id: :room_bedroom
@@ -31,10 +31,10 @@ defmodule RoomCtrl.Supervisor do
            :mqtt,
            [
              name: "living",
-             input: {InputDriver.Ikea5Btn, ["remote_living"], nil},
-             input: {InputDriver.IkeaMotionSensor, ["motion_entrance"], nil},
-             input: {InputDriver.IkeaMotionSensor, ["motion_dining"], nil},
-             input: {InputDriver.IkeaMotionSensor, ["motion_kitchen"], nil}
+             input: {InputDriver.Ikea.RemoteTradfri, ["remote_living"], nil},
+             input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_entrance"], nil},
+             input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_dining"], nil},
+             input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_kitchen"], nil}
            ]
          ]},
         id: :room_living
@@ -46,8 +46,8 @@ defmodule RoomCtrl.Supervisor do
            :mqtt,
            [
              name: "bathroom",
-             input: {InputDriver.Ikea5Btn, ["remote_bathroom"], nil},
-             input: {InputDriver.IkeaMotionSensor, ["motion_bathroom"], nil}
+             input: {InputDriver.Ikea.RemoteTradfri, ["remote_bathroom"], nil},
+             input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_bathroom"], nil}
            ]
          ]},
         id: :room_bathroom

@@ -1,4 +1,4 @@
-defmodule InputDriver.IkeaMotionSensor do
+defmodule InputDriver.Ikea.MotionSensorTradfri do
   use GenServer
   require Logger
 
