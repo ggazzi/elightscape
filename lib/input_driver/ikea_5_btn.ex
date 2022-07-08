@@ -35,13 +35,8 @@ defmodule InputDriver.Ikea5Btn do
 
   @impl true
   def handle_info({:mqtt, topic, payload}, state) when topic == state.topic do
-    new_button = decode_action(payload)
-
-    if new_button != nil do
-      send(state.subscriber, {__MODULE__, self(), new_button})
-    end
-
-    {:noreply, %{state | button: new_button}}
+    send(state.subscriber, {__MODULE__, self(), decode_action(payload)})
+    {:noreply, state}
   end
 
   def handle_info({:DOWN, ref, :process, _which, reason}, state)
@@ -49,16 +44,22 @@ defmodule InputDriver.Ikea5Btn do
     {:stop, {:mqtt_down, reason}, state}
   end
 
-  def decode(payload) do
-    data = JSON.decode!(payload)
-    decode_action(data["action"])
-  end
-
-  def decode_action(action) do
+  defp decode_action(action) do
     case action do
-      "" -> nil
-      "toggle" -> :toggle
-      _ -> action
+      "toggle" -> {:toggle, :click}
+      "toggle_hold" -> {:toggle, :hold}
+      "arrow_right_click" -> {:arrow_right, :click}
+      "arrow_right_hold" -> {:arrow_right, :hold}
+      "arrow_right_release" -> {:arrow_right, :release}
+      "arrow_left_click" -> {:arrow_left, :click}
+      "arrow_left_hold" -> {:arrow_left, :hold}
+      "arrow_left_release" -> {:arrow_left, :release}
+      "brightness_up_click" -> {:brightness_up, :click}
+      "brightness_up_hold" -> {:brightness_up, :hold}
+      "brightness_up_release" -> {:brightness_up, :release}
+      "brightness_down_click" -> {:brightness_down, :click}
+      "brightness_down_hold" -> {:brightness_down, :hold}
+      "brightness_down_release" -> {:brightness_down, :release}
     end
   end
 end

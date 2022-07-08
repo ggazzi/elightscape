@@ -54,33 +54,33 @@ defmodule Room.StateMachine do
     handle_cast(state.timeout_event, {config, state})
   end
 
-  def react_to_event(:toggle, state) do
-    if state[:lights_on] do
-      %{state | :lights_on => false, :listening_to_sensor => false}
+  def react_to_event({:toggle, :click}, state) do
+    if state.lights_on do
+      %{state | lights_on: false, listening_to_sensor: false}
     else
-      %{state | :lights_on => true, :listening_to_sensor => true}
+      %{state | lights_on: true, listening_to_sensor: true}
     end
   end
 
   def react_to_event(:always_on, state) do
-    %{state | :lights_on => true, :listening_to_sensor => false}
+    %{state | lights_on: true, listening_to_sensor: false}
   end
 
   def react_to_event(:always_off, state) do
-    %{state | :lights_on => false, :listening_to_sensor => false}
+    %{state | lights_on: false, listening_to_sensor: false}
   end
 
   def react_to_event(:sensor_active, state) do
-    if state[:listening_to_sensor] do
-      %{state | :lights_on => true}
+    if state.listening_to_sensor do
+      %{state | lights_on: true}
     else
       state
     end
   end
 
   def react_to_event(:sensor_timeout, state) do
-    if state[:listening_to_sensor] do
-      %{state | :lights_on => false}
+    if state.listening_to_sensor do
+      %{state | lights_on: false}
     else
       state
     end
