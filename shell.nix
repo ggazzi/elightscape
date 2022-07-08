@@ -3,12 +3,12 @@ let
   # pkgs = import (fetchTarball("https://github.com/NixOS/nixpkgs/archive/a58a0b5098f0c2a389ee70eb69422a052982d990.tar.gz")) {};
 
   # Rolling updates, not deterministic.
-  pkgs = import (fetchTarball("channel:nixos-21.11")) {};
+  pkgs = import (fetchTarball("channel:nixos-22.05")) {};
 in pkgs.mkShell {
-  buildInputs = with pkgs; [ cargo rustc rustfmt rls rust-analyzer elixir ];
+  buildInputs = with pkgs; [ elixir erlang cmake nixpkgs-fmt ];
 
-  # Certain Rust tools won't work without this
-  # This can also be fixed by using oxalica/rust-overlay and specifying the rust-src extension
-  # See https://discourse.nixos.org/t/rust-src-not-found-and-other-misadventures-of-developing-rust-on-nixos/11570/3?u=samuela. for more details.
-  RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
+  # We need the following variable so that emqtt builds
+  shellHook = ''
+    export BUILD_WITHOUT_QUIC=1
+  '';
 }
