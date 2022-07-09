@@ -1,60 +1,124 @@
 defmodule Mqtt do
-  use GenServer
+  use Connection
   require Logger
   alias Mqtt.SubscriptionTable, as: Table
+  alias Mqtt.Topic, as: Topic
 
-  ## Client API
+  ## Public API
 
   def start(config, opts) do
-    GenServer.start(__MODULE__, config, opts)
+    Connection.start(__MODULE__, config, opts)
   end
 
   def start_link(config, opts) do
-    GenServer.start_link(__MODULE__, config, opts)
+    Connection.start_link(__MODULE__, config, opts)
   end
 
-  def subscribe(server, subscriptions) do
-    GenServer.call(server, {:subscribe, %{}, subscriptions})
+  @spec subscribe(term, String.t()) :: term
+  def subscribe(server, filter) do
+    Connection.call(server, {:subscribe, filter})
   end
 
-  def unsubscribe(server, subscriptions) do
-    GenServer.call(server, {:unsubscribe, %{}, subscriptions})
+  @spec unsubscribe(term, String.t()) :: term
+  def unsubscribe(server, filter) do
+    Connection.call(server, {:unsubscribe, filter})
   end
 
-  ## GenServer Callbacks
-
-  defstruct [:pid, :props, :subs, :pids]
-
-  def child_spec([config | opts]) do
-    %{id: __MODULE__, start: {__MODULE__, :start_link, [config, opts]}}
-  end
+  ## Connection Callbacks
 
   @impl true
   def init(config) do
+    Logger.debug("init")
+
+    state = %{
+      config: config,
+      subscriptions: Table.new(),
+      subscribers: %{},
+      conn_pid: nil
+    }
+
+    {:connect, :init, state}
+  end
+
+  @impl true
+  def connect(_, %{config: config, subscriptions: subscriptions} = state) do
     case :emqtt.start_link(config) do
       {:error, reason} ->
-        {:stop, reason}
+        Logger.warn(fn -> "Unable to open emqtt socket: #{inspect(reason)}" end)
+        {:backoff, 1000, state}
 
-      {:ok, pid} ->
-        case :emqtt.connect(pid) do
+      {:ok, conn_pid} ->
+        Process.unlink(conn_pid)
+        Process.monitor(conn_pid)
+        Logger.debug(fn -> "Opened emqtt socket, pid: #{inspect(conn_pid)}" end)
+
+        case :emqtt.connect(conn_pid) do
           {:error, reason} ->
-            {:stop, reason}
+            Logger.warn(fn -> "Unable to connect to mqtt: #{inspect(reason)}" end)
+            {:backoff, 1000, state}
 
-          {:ok, properties} ->
-            {:ok, %__MODULE__{pid: pid, props: properties, subs: Table.new(), pids: %{}}}
+          {:ok, props} ->
+            Logger.debug(fn -> "Connected to mqtt, properties: #{inspect(props)}" end)
+
+            case resubscribe_all(conn_pid, subscriptions) do
+              :ok ->
+                {:ok, %{state | conn_pid: conn_pid}}
+
+              :error ->
+                {:backoff, 1000, state}
+            end
         end
     end
   end
 
-  @impl true
-  def handle_info({:disconnect, reason_code, props}, state) do
-    {:stop, {:mqtt_disconnected, reason_code, props}, state}
+  defp resubscribe_all(conn_pid, subscriptions) do
+    filters = Table.subscribed_filters(subscriptions)
+
+    if Enum.empty?(filters) do
+      :ok
+    else
+      filters =
+        for filter <- Table.subscribed_filters(subscriptions),
+            do: {Topic.to_string(filter), []}
+
+      case :emqtt.subscribe(conn_pid, %{}, filters) do
+        {:error, reason} ->
+          Logger.warn(fn ->
+            "Failed to resubscribe with new mqtt connection: #{inspect(reason)}"
+          end)
+
+          :error
+
+        {:ok, _props, _reason_codes} ->
+          :ok
+      end
+    end
   end
 
-  def handle_info({:publish, %{topic: topic, payload: payload}}, state) do
+  @impl true
+  def disconnect(_info, %{conn_pid: conn_pid} = state) do
+    :emqtt.disconnect(conn_pid)
+    {:connect, :reconnect, %{state | conn_pid: nil}}
+  end
+
+  @impl true
+  def handle_info({:disconnect, reason_code, props}, state) do
+    {:connect, {:mqtt_disconnected, reason_code, props}, %{state | conn_pid: nil}}
+  end
+
+  def handle_info({:DOWN, _ref, :process, pid, reason}, %{conn_pid: conn_pid} = state)
+      when pid == conn_pid do
+    {:connect, {:emqtt_down, reason}, %{state | conn_pid: nil}}
+  end
+
+  @impl true
+  def handle_info(
+        {:publish, %{topic: topic, payload: payload}},
+        %{subscriptions: subscriptions} = state
+      ) do
     Logger.debug(fn -> "Recv a PUBLISH packet - topic=#{topic} payload=#{payload}" end)
 
-    for subscriber <- Table.lookup(state.subs, parse_topic(topic)) do
+    for subscriber <- Table.lookup(subscriptions, topic) do
       Logger.debug(fn -> "Sending to #{inspect(subscriber)}" end)
       send(subscriber, {:mqtt, topic, payload})
     end
@@ -70,71 +134,112 @@ defmodule Mqtt do
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
-    case state.pids[pid] do
+  def handle_info(
+        {:DOWN, _ref, :process, pid, _reason},
+        %{subscriptions: subscriptions, subscribers: subscribers} = state
+      ) do
+    case subscribers[pid] do
       nil ->
         {:noreply, state}
 
-      {_ref, topics} ->
-        subs =
-          for topic <- topics, reduce: state.subs do
-            subs -> Table.unsubscribe(subs, pid, topic)
+      {_ref, filters} ->
+        {subscriptions, to_unsubscribe} =
+          for filter <- filters, reduce: {subscriptions, []} do
+            {subs, unsubs} ->
+              subs = Table.unsubscribe(subs, pid, filter)
+
+              # Collect filters that no longer have any subscriber
+              unsubs =
+                if not Table.contains_filter?(subs, filter),
+                  do: [Topic.to_string(filter) | unsubs],
+                  else: unsubs
+
+              {subs, unsubs}
           end
 
-        pids = Map.delete(state.pids, pid)
-        {:noreply, %{state | pids: pids, subs: subs}}
+        Task.start(fn -> :emqtt.unsubscribe(state.conn_pid, %{}, to_unsubscribe) end)
+
+        subscribers = Map.delete(subscribers, pid)
+        {:noreply, %{state | subscribers: subscribers, subscriptions: subscriptions}}
     end
   end
 
   @impl true
-  def handle_call({:subscribe, properties, topics}, {from, _id}, state) do
-    case :emqtt.subscribe(state.pid, properties, topics) do
+  def handle_call(
+        {:subscribe, filter},
+        {from, _id},
+        %{subscriptions: subscriptions, subscribers: subscribers} = state
+      ) do
+    case ensure_subscribed(state, filter) do
       {:error, reason} ->
         {:reply, {:error, reason}, state}
 
-      {:ok, props, reason_codes} ->
-        topics = for {topic, _subopt} <- topics, do: parse_topic(topic)
-        subs = for topic <- topics, into: state.subs, do: {from, topic}
-
-        pids =
-          case state.pids[from] do
+      {:ok, parsed_filter} ->
+        # Ensure we are monitoring the subscriber to clean up if they die
+        subscribers =
+          case subscribers[from] do
             nil ->
               ref = Process.monitor(from)
-              Map.put(state.pids, from, {ref, topics})
+              Map.put(subscribers, from, {ref, MapSet.new([filter])})
 
-            {ref, old_topics} ->
-              Map.put(state.pids, from, {ref, topics ++ old_topics})
+            {ref, filters} ->
+              Map.put(subscribers, from, {ref, MapSet.put(filters, filter)})
           end
 
-        {:reply, {:ok, props, reason_codes}, %{state | subs: subs, pids: pids}}
+        subscriptions = Table.subscribe(subscriptions, from, parsed_filter)
+        {:reply, :ok, %{state | subscriptions: subscriptions, subscribers: subscribers}}
     end
   end
 
   @impl true
-  def handle_call({:unsubscribe, properties, topics}, {from, _id}, state) do
-    case :emqtt.subscribe(state.pid, properties, topics) do
-      {:error, reason} ->
-        {:reply, {:error, reason}, state}
+  def handle_call(
+        {:unsubscribe, filter},
+        {from, _id},
+        %{subscriptions: subscriptions, subscribers: subscribers} = state
+      ) do
+    parsed_filter = Topic.parse(filter)
+    subscriptions = Table.unsubscribe(subscriptions, from, filter)
 
-      {:ok, props, reason_codes} ->
-        subs =
-          for {topic, _subopt} <- topics, reduce: state.subs do
-            subs -> Table.unsubscribe(subs, from, parse_topic(topic))
-          end
-
-        pids = Map.delete(state.pids, from)
-
-        {:reply, {:ok, props, reason_codes}, %{state | subs: subs, pids: pids}}
+    # Unsubscribe to schema if no other subscribers are left
+    unless Table.contains_filter?(subscriptions, parsed_filter) do
+      Task.start(fn -> :emqtt.unsubscribe(state.conn_pid, %{}, [filter]) end)
     end
+
+    # Deregister subscriber if no other subscriptions are left
+    subscribers =
+      case subscribers[from] do
+        nil ->
+          subscribers
+
+        {ref, filters} ->
+          filters = MapSet.delete(filters, filter)
+
+          if Enum.empty?(filters) do
+            Process.demonitor(ref)
+            Map.delete(subscribers, from)
+          else
+            %{subscribers | from => {ref, filters}}
+          end
+      end
+
+    {:reply, :ok, %{state | subscribers: subscribers, subscriptions: subscriptions}}
   end
 
-  defp parse_topic(topic) do
-    for fragment <- String.split(topic, ~r"/") do
-      case fragment do
-        "#" -> :any_deep
-        "+" -> :any
-        _ -> fragment
-      end
+  defp ensure_subscribed(%{subscriptions: subs, conn_pid: conn_pid}, filter) do
+    parsed_filter = Topic.parse(filter)
+
+    cond do
+      Table.contains_filter?(subs, parsed_filter) ->
+        {:ok, parsed_filter}
+
+      conn_pid == nil ->
+        {:error, :disconnected}
+
+      true ->
+        case :emqtt.subscribe(conn_pid, %{}, [{filter, []}]) do
+          {:error, reason} -> {:error, reason}
+          {:ok, _props, _reason_codes} -> {:ok, parsed_filter}
+        end
     end
   end
 end

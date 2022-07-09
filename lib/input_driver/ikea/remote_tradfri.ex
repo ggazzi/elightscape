@@ -19,8 +19,8 @@ defmodule InputDriver.Ikea.RemoteTradfri do
     # FIXME: remove hardcoded MQTT topic prefix
     topic = "zigbee/#{entity_id}/action"
 
-    case Mqtt.subscribe(mqtt, [{topic, []}]) do
-      {:ok, _props, _reason_codes} ->
+    case Mqtt.subscribe(mqtt, topic) do
+      :ok ->
         ref = Process.monitor(mqtt)
         {:ok, %{button: nil, topic: topic, subscriber: subscriber, mqtt: {ref, mqtt}}}
 

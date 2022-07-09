@@ -1,4 +1,5 @@
 %{
+  "connection": {:hex, :connection, "1.1.0", "ff2a49c4b75b6fb3e674bfc5536451607270aac754ffd1bdfe175abe4a6d7a68", [:mix], [], "hexpm", "722c1eb0a418fbe91ba7bd59a47e28008a189d47e37e0e7bb85585a016b2869c"},
   "cowlib": {:hex, :cowlib, "2.11.0", "0b9ff9c346629256c42ebe1eeb769a83c6cb771a6ee5960bd110ab0b9b872063", [:make, :rebar3], [], "hexpm", "2b3e9da0b21c4565751a6d4901c20d1b4cc25cbb7fd50d91d2ab6dd287bc86a9"},
   "emqtt": {:git, "https://github.com/emqx/emqtt.git", "51c809ff9081bde73d7996d7d40472789c4038b6", [tag: "1.6.0"]},
   "getopt": {:hex, :getopt, "1.0.2", "33d9b44289fe7ad08627ddfe1d798e30b2da0033b51da1b3a2d64e72cd581d02", [:rebar3], [], "hexpm", "a0029aea4322fb82a61f6876a6d9c66dc9878b6cb61faa13df3187384fd4ea26"},

@@ -18,8 +18,8 @@ defmodule InputDriver.Ikea.MotionSensorTradfri do
   def init({mqtt, subscriber, entity_id}) do
     topic = "zigbee/#{entity_id}"
 
-    case Mqtt.subscribe(mqtt, [{topic, []}]) do
-      {:ok, _props, _reason_codes} ->
+    case Mqtt.subscribe(mqtt, topic) do
+      :ok ->
         ref = Process.monitor(mqtt)
         {:ok, %{subscriber: subscriber, topic: topic, entity_id: entity_id, mqtt: {ref, mqtt}}}
 

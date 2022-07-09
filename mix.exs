@@ -7,7 +7,13 @@ defmodule Elightscape.MixProject do
       version: "0.1.0",
       elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      elixirc_paths:
+        case Mix.env() do
+          :test -> ["lib", "test/utils"]
+          :dev -> ["lib", "test/utils"]
+          _ -> ["lib"]
+        end
     ]
   end
 
@@ -28,6 +34,7 @@ defmodule Elightscape.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:connection, "~> 1.1"},
       {:gun, "~> 2.0.0-rc.2", override: true},
       {:json, "~> 1.4"},
       {:emqtt, github: "emqx/emqtt", tag: "1.6.0"},

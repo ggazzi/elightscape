@@ -4,6 +4,8 @@ defmodule Elightscape do
 
   @impl true
   def start(_type, _args) do
+    {:ok, self()}
+
     case connect() do
       {:ok, _} -> {:ok, self()}
       {:error, e} -> {:error, e}
@@ -16,6 +18,9 @@ defmodule Elightscape do
   end
 
   def connect(config) do
+    {:ok, mqtt_pid} = Mqtt.start_link(config[:mqtt], [])
+    Process.register(mqtt_pid, :mqtt)
+
     Elightscape.Supervisor.start_link(config, name: Elightscape.Supervisor)
   end
 
