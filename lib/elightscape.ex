@@ -4,8 +4,6 @@ defmodule Elightscape do
 
   @impl true
   def start(_type, _args) do
-    {:ok, self()}
-
     case connect() do
       {:ok, _} -> {:ok, self()}
       {:error, e} -> {:error, e}
