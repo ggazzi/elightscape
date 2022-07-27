@@ -35,12 +35,15 @@ defmodule Room.StateMachine do
   @impl true
   def handle_cast(event, {config, state}) do
     new_state = react_to_event(event, state)
-    {output, timeout} = react_to_state_change(config, state, new_state)
-    Logger.info(fn -> "#{inspect(output)} -> #{inspect(new_state)}" end)
 
-    send(config.controller, {__MODULE__, output})
+    effects = determine_effects(config, state, new_state)
+    Logger.info(fn -> "#{inspect(effects)} -> #{inspect(new_state)}" end)
 
-    case timeout do
+    if effects != nil do
+      send(config.controller, {__MODULE__, effects})
+    end
+
+    case determine_timeout(config, new_state) do
       nil ->
         {:noreply, {config, Map.delete(new_state, :timeout_event)}}
 
@@ -54,6 +57,43 @@ defmodule Room.StateMachine do
     handle_cast(state.timeout_event, {config, state})
   end
 
+  @doc """
+  Determine which effects are necessary to transition from the current state into the next.
+
+  These effects should be sent to the controller, which will interpret them.
+  If no effects are necessary, produces `nil`.
+  """
+  def determine_effects(_config, curr, next) do
+    if curr.lights_on != next.lights_on do
+      {:set_lights, next.lights_on}
+    end
+  end
+
+  @doc """
+  Determine which timeout is required by the given state.
+
+  If a timeout is necessary returns a pair `{timeout, event}`, stating that the
+  given `event` should be processed by `react_to_event` after the timeout.
+  Otherwise, returnis `nil`.
+  """
+  def determine_timeout(
+        config,
+        %{
+          lights_on: lights_on,
+          listening_to_sensor: listening_to_sensor
+        } = _state
+      ) do
+    if lights_on and listening_to_sensor do
+      # Any event will reset the sensor timeout
+      {config.sensor_timeout, :sensor_timeout}
+    end
+  end
+
+  @doc """
+  Update the state according to the current state and an event received from the controller.
+
+  This will only change the internal state, external effects will be handled by other functions.
+  """
   def react_to_event({:toggle, :click}, state) do
     if state.lights_on do
       %{state | lights_on: false, listening_to_sensor: false}
@@ -93,18 +133,5 @@ defmodule Room.StateMachine do
   def react_to_event(unknown, state) do
     Logger.warn(fn -> "Unknown event #{inspect(unknown)}" end)
     state
-  end
-
-  def react_to_state_change(config, curr, next) do
-    if curr.lights_on != next.lights_on do
-      timeout =
-        if next.lights_on and next.listening_to_sensor do
-          {config.sensor_timeout, :sensor_timeout}
-        end
-
-      {{:set_lights, next.lights_on}, timeout}
-    else
-      {nil, nil}
-    end
   end
 end

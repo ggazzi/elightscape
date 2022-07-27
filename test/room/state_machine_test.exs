@@ -53,6 +53,16 @@ defmodule Room.StateMachineTest do
       assert_effect({:set_lights, true})
       assert_effect({:set_lights, false}, @sensor_timeout)
     end
+
+    test "is idempotent", %{machine: machine} do
+      send_event(machine, {:on, :click})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {:on, :click})
+      send_event(machine, {:on, :click})
+      refute_effect({:set_lights, true})
+      assert_effect({:set_lights, false}, @sensor_timeout)
+    end
   end
 
   describe "event `:off`:" do
@@ -105,6 +115,21 @@ defmodule Room.StateMachineTest do
 
       send_event(machine, :sensor_active)
       assert_effect({:set_lights, true})
+      assert_effect({:set_lights, false}, @sensor_timeout)
+    end
+
+    test "repeated activations of the sensor before the timeout are idempotent", %{
+      machine: machine
+    } do
+      send_event(machine, {:toggle, :click})
+      assert_effect({:set_lights, true})
+      assert_effect({:set_lights, false}, @sensor_timeout)
+
+      send_event(machine, :sensor_active)
+      assert_effect({:set_lights, true})
+
+      send_event(machine, :sensor_active)
+      send_event(machine, :sensor_active)
       assert_effect({:set_lights, false}, @sensor_timeout)
     end
   end
