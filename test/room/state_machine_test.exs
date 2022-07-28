@@ -32,7 +32,7 @@ defmodule Room.StateMachineTest do
   end
 
   describe "event `{:toggle, :click, 1}`:" do
-    test "works correctly with (and starting state of machine is off)", %{machine: machine} do
+    test "works correctly (and starting state of machine is off)", %{machine: machine} do
       send_event(machine, {:toggle, :click, 1})
       assert_effect({:set_lights, true})
 
@@ -47,8 +47,69 @@ defmodule Room.StateMachineTest do
     end
   end
 
+  describe "event `{:toggle, :click, 2}`:" do
+    test "turns the lights on ignoring the sensor", %{machine: machine} do
+      send_event(machine, {:toggle, :click, 2})
+      assert_effect({:set_lights, true})
+      refute_effect({:set_lights, false}, @sensor_timeout)
+    end
+
+    test "turns the sensor off even if lights were already on", %{machine: machine} do
+      send_event(machine, {:on, :click, 1})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {:toggle, :click, 2})
+      refute_effect({:set_lights, _}, @sensor_timeout)
+    end
+
+    test "is idempotent", %{machine: machine} do
+      send_event(machine, {:toggle, :click, 2})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {:toggle, :click, 2})
+      send_event(machine, {:toggle, :click, 2})
+      refute_effect({:set_lights, true})
+    end
+  end
+
+  describe "event `{:toggle, :click, 3}`:" do
+    test "turn the lights off but the sensor on", %{machine: machine} do
+      send_event(machine, {:on, :click, 2})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {:toggle, :click, 3})
+      assert_effect({:set_lights, false})
+
+      send_event(machine, :sensor_active)
+      assert_effect({:set_lights, true})
+    end
+
+    test "turns the sensor on even if lights were already off", %{machine: machine} do
+      send_event(machine, {:toggle, :click, 3})
+      refute_effect({:set_lights, false})
+
+      send_event(machine, :sensor_active)
+      assert_effect({:set_lights, true})
+    end
+
+    test "is idempotent", %{machine: machine} do
+      send_event(machine, {:on, :click, 1})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {:toggle, :click, 3})
+      assert_effect({:set_lights, false})
+
+      send_event(machine, {:toggle, :click, 3})
+      send_event(machine, {:toggle, :click, 3})
+      refute_effect({:set_lights, _})
+
+      send_event(machine, :sensor_active)
+      assert_effect({:set_lights, true})
+    end
+  end
+
   describe "event `{:on, :click, 1}`:" do
-    test "turns the machine on and listens to the sensor", %{machine: machine} do
+    test "turns the lights on and listens to the sensor", %{machine: machine} do
       send_event(machine, {:on, :click, 1})
       assert_effect({:set_lights, true})
       assert_effect({:set_lights, false}, @sensor_timeout)
@@ -63,10 +124,44 @@ defmodule Room.StateMachineTest do
       refute_effect({:set_lights, true})
       assert_effect({:set_lights, false}, @sensor_timeout)
     end
+
+    test "turns the sensor on even if lights were already on", %{machine: machine} do
+      send_event(machine, {:on, :click, 2})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {:on, :click, 1})
+      refute_effect({:set_lights, true})
+      assert_effect({:set_lights, false}, @sensor_timeout)
+    end
+  end
+
+  describe "event `{:on, :click, 2}`:" do
+    test "turns the lights on ignoring the sensor", %{machine: machine} do
+      send_event(machine, {:on, :click, 2})
+      assert_effect({:set_lights, true})
+      refute_effect({:set_lights, false}, @sensor_timeout)
+    end
+
+    test "turns the sensor off even if lights were already on", %{machine: machine} do
+      send_event(machine, {:on, :click, 1})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {:on, :click, 2})
+      refute_effect({:set_lights, _}, @sensor_timeout)
+    end
+
+    test "is idempotent", %{machine: machine} do
+      send_event(machine, {:on, :click, 2})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {:on, :click, 2})
+      send_event(machine, {:on, :click, 2})
+      refute_effect({:set_lights, true})
+    end
   end
 
   describe "event `{:off, click, 1}`:" do
-    test "turns the machine off ignoring the sensor", %{machine: machine} do
+    test "turns the lights off ignoring the sensor", %{machine: machine} do
       send_event(machine, {:on, :click, 1})
       assert_effect({:set_lights, true})
 
@@ -93,6 +188,42 @@ defmodule Room.StateMachineTest do
       send_event(machine, {:off, :click, 1})
       send_event(machine, {:off, :click, 1})
       refute_effect({:set_lights, _})
+    end
+  end
+
+  describe "event `{:off, click, 2}`:" do
+    test "turn the lights off but the sensor on", %{machine: machine} do
+      send_event(machine, {:on, :click, 2})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {:off, :click, 2})
+      assert_effect({:set_lights, false})
+
+      send_event(machine, :sensor_active)
+      assert_effect({:set_lights, true})
+    end
+
+    test "turns the sensor on even if lights were already off", %{machine: machine} do
+      send_event(machine, {:off, :click, 2})
+      refute_effect({:set_lights, false})
+
+      send_event(machine, :sensor_active)
+      assert_effect({:set_lights, true})
+    end
+
+    test "is idempotent", %{machine: machine} do
+      send_event(machine, {:on, :click, 1})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {:off, :click, 2})
+      assert_effect({:set_lights, false})
+
+      send_event(machine, {:off, :click, 2})
+      send_event(machine, {:off, :click, 2})
+      refute_effect({:set_lights, _})
+
+      send_event(machine, :sensor_active)
+      assert_effect({:set_lights, true})
     end
   end
 

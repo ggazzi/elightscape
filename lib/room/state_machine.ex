@@ -103,18 +103,34 @@ defmodule Room.StateMachine do
     end
   end
 
+  def react_to_event({:toggle, :click, 2}, state) do
+    # Sets to always-on
+    %{state | lights_on: true, listening_to_sensor: false}
+  end
+
+  def react_to_event({:toggle, :click, 3}, state) do
+    # Sets to sensor-off
+    %{state | lights_on: false, listening_to_sensor: true}
+  end
+
   def react_to_event({:on, :click, 1}, state) do
     # Sets to sensor-on
-    %{
-      state
-      | lights_on: true,
-        listening_to_sensor: state.listening_to_sensor or not state.lights_on
-    }
+    %{state | lights_on: true, listening_to_sensor: true}
+  end
+
+  def react_to_event({:on, :click, 2}, state) do
+    # Sets to always-on
+    %{state | lights_on: true, listening_to_sensor: false}
   end
 
   def react_to_event({:off, :click, 1}, state) do
     # Sets to always-off
     %{state | lights_on: false, listening_to_sensor: false}
+  end
+
+  def react_to_event({:off, :click, 2}, state) do
+    # Sets to sensor-off
+    %{state | lights_on: false, listening_to_sensor: true}
   end
 
   def react_to_event(:sensor_active, state) do
