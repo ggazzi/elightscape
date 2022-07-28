@@ -62,7 +62,7 @@ defmodule Room.Controller do
     {:noreply, state}
   end
 
-  def handle_info({module, pid, event}, state) do
+  def handle_info({_module, pid, event}, state) do
     case state.triggers[pid] do
       nil ->
         Logger.warn(fn -> "[#{inspect(pid)}] unknown subscription #{inspect(event)}" end)
@@ -77,7 +77,7 @@ defmodule Room.Controller do
     end
   end
 
-  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
+  def handle_info({:DOWN, ref, :process, pid, _reason}, state) do
     case state.triggers[pid] do
       nil ->
         {:noreply, state}
