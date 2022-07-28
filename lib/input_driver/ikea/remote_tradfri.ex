@@ -1,5 +1,5 @@
 defmodule InputDriver.Ikea.RemoteTradfri do
-  use InputDriver.MqttButtons
+  use InputDriver.MqttButtons, click_cooldown: 200, fire_click_immediately: false
 
   ## Client API
 
