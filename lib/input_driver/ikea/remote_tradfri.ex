@@ -2,6 +2,8 @@ defmodule InputDriver.Ikea.RemoteTradfri do
   use GenServer
   require Logger
 
+  @click_cooldown 300
+
   ## Client API
 
   def start([mqtt, subscriber, entity_id | opts]) do
@@ -22,7 +24,15 @@ defmodule InputDriver.Ikea.RemoteTradfri do
     case Mqtt.subscribe(mqtt, topic) do
       :ok ->
         ref = Process.monitor(mqtt)
-        {:ok, %{button: nil, topic: topic, subscriber: subscriber, mqtt: {ref, mqtt}}}
+
+        {:ok,
+         %{
+           curr_held: nil,
+           curr_click: nil,
+           topic: topic,
+           subscriber: subscriber,
+           mqtt: {ref, mqtt}
+         }}
 
       {:error, reason} ->
         {:stop, reason}
@@ -30,14 +40,68 @@ defmodule InputDriver.Ikea.RemoteTradfri do
   end
 
   @impl true
-  def handle_info({:mqtt, topic, payload}, state) when topic == state.topic do
-    send(state.subscriber, {__MODULE__, self(), decode_action(payload)})
-    {:noreply, state}
+  def handle_info(
+        {:mqtt, topic, payload},
+        %{curr_held: curr_held, curr_click: curr_click} = state
+      )
+      when topic == state.topic do
+    case decode_action(payload) do
+      {button, :hold} = action when curr_held == nil ->
+        send_action(state, action)
+        {:noreply, %{state | curr_held: button, curr_click: nil}}
+
+      {^curr_held, :release} = action ->
+        send_action(state, action)
+        {:noreply, %{state | curr_held: nil, curr_click: nil}}
+
+      {button, :click} ->
+        case curr_click do
+          nil ->
+            {:noreply, %{state | curr_click: {button, 1}}, @click_cooldown}
+
+          {^button, n} ->
+            {:noreply, %{state | curr_click: {button, n + 1}}, @click_cooldown}
+
+          {other_button, n} ->
+            send_action(state, {other_button, :click, n})
+            {:noreply, %{state | curr_click: {button, 1}}, @click_cooldown}
+        end
+    end
+  end
+
+  def handle_info(:timeout, %{curr_click: curr_click} = state) do
+    case curr_click do
+      {button, n} -> send_action(state, {button, :click, n})
+      nil -> nil
+    end
+
+    {:noreply, %{state | curr_click: nil}}
   end
 
   def handle_info({:DOWN, ref, :process, _which, reason}, state)
       when ref == elem(state.mqtt, 0) do
     {:stop, {:mqtt_down, reason}, state}
+  end
+
+  @impl true
+  def terminate(reason, %{curr_held: curr_held, curr_click: curr_click} = state) do
+    case curr_click do
+      {button, n} ->
+        send_action(state, {button, :click, n})
+
+      nil ->
+        nil
+    end
+
+    if curr_held != nil do
+      send_action(state, {curr_held, :release})
+    end
+
+    {:stop, reason}
+  end
+
+  defp send_action(%{subscriber: subscriber}, action) do
+    send(subscriber, {__MODULE__, self(), action})
   end
 
   defp decode_action(action) do

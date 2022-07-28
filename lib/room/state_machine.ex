@@ -94,7 +94,8 @@ defmodule Room.StateMachine do
 
   This will only change the internal state, external effects will be handled by other functions.
   """
-  def react_to_event({:toggle, :click}, state) do
+  def react_to_event({:toggle, :click, 1}, state) do
+    # Toggles between always-off and sensor-on
     if state.lights_on do
       %{state | lights_on: false, listening_to_sensor: false}
     else
@@ -102,7 +103,8 @@ defmodule Room.StateMachine do
     end
   end
 
-  def react_to_event({:on, :click}, state) do
+  def react_to_event({:on, :click, 1}, state) do
+    # Sets to sensor-on
     %{
       state
       | lights_on: true,
@@ -110,7 +112,8 @@ defmodule Room.StateMachine do
     }
   end
 
-  def react_to_event({:off, :click}, state) do
+  def react_to_event({:off, :click, 1}, state) do
+    # Sets to always-off
     %{state | lights_on: false, listening_to_sensor: false}
   end
 
