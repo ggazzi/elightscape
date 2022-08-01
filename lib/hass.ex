@@ -27,6 +27,8 @@ defmodule Hass do
   import Hass.UtilMacros
 
   ws_call(:call_service, [domain, service, opts])
+  ws_call(:subscribe_trigger, [trigger])
+  ws_call(:unsubscribe, [sub_id])
 
   #############################################################################
   ## GenServer callbacks

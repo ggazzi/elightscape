@@ -39,6 +39,32 @@ defmodule Hass.WebSocket do
     end
   end
 
+  def subscribe_trigger(conn, trigger) do
+    id =
+      GenServer.call(
+        conn,
+        {{:subscribe, :trigger}, %{type: :subscribe_trigger, trigger: trigger}}
+      )
+
+    receive do
+      {:hass, ^id, :subscribed} -> {:ok, id}
+      {:hass, ^id, {:error, _} = error} -> error
+    end
+  end
+
+  def unsubscribe(conn, sub_id) do
+    case GenServer.call(conn, {:unsubscribe, sub_id}) do
+      {:error, _} = error ->
+        error
+
+      {:ok, unsub_id} ->
+        receive do
+          {:hass, ^unsub_id, :unsubscribed} -> :ok
+          {:hass, ^unsub_id, {:error, _} = error} -> error
+        end
+    end
+  end
+
   #############################################################################
   ## GenServer callbacks
 
@@ -105,39 +131,53 @@ defmodule Hass.WebSocket do
   end
 
   @impl true
-  def handle_call({hdl_type, msg}, {pid, _}, state) do
+  def handle_call({:unsubscribe, sub_id}, {caller, _}, state) do
+    case state.handlers[sub_id] do
+      {{:subscription, kind}, _subscriber} ->
+        {unsub_id, state} =
+          send_message_with_handler(
+            unsubscription_message(sub_id, kind),
+            {{:unsubscribe, sub_id}, caller},
+            state
+          )
+
+        {:reply, {:ok, unsub_id}, state}
+
+      _ ->
+        {:reply, {:error, :no_subscription}, state}
+    end
+  end
+
+  def handle_call({hdl_type, msg}, {caller, _}, state) do
+    {id, state} = send_message_with_handler(msg, {hdl_type, caller}, state)
+    {:reply, id, state}
+  end
+
+  defp send_message_with_handler(
+         msg,
+         handler,
+         %{conn_pid: conn_pid, stream_ref: stream_ref} = state
+       ) do
     id = state.last_id + 1
     msg = JSON.encode!(Map.put(msg, :id, id))
     Logger.debug(fn -> "Sending: #{msg}" end)
+    :gun.ws_send(conn_pid, stream_ref, {:text, msg})
 
-    :gun.ws_send(state.conn_pid, state.stream_ref, {:text, msg})
-
-    handlers = Map.put(state.handlers, id, {hdl_type, pid})
-    state = %{state | last_id: id, handlers: handlers}
-    {:reply, id, state}
+    handlers = Map.put(state.handlers, id, handler)
+    {id, %{state | last_id: id, handlers: handlers}}
   end
 
   @impl true
   def handle_info(
         {:gun_ws, pid, ref, {:text, data}},
-        %{conn_pid: conn_pid, stream_ref: stream_ref} = state
+        %{conn_pid: conn_pid, stream_ref: stream_ref, handlers: handlers} = state
       )
       when pid == conn_pid and ref == stream_ref do
     Logger.debug(fn -> "received: #{data}" end)
+
     msg = JSON.decode!(data)
     id = msg["id"]
-
-    state =
-      case state.handlers[id] do
-        nil ->
-          Logger.warn(fn -> "Unknown handler for message: #{inspect(msg)}" end)
-          state
-
-        {:command, caller} ->
-          send(caller, {:hass, id, handle_command_response(msg)})
-          %{state | handlers: Map.drop(state.handlers, [id])}
-      end
-
+    state = apply_response_handler(id, msg, handlers[id], state)
     {:noreply, state}
   end
 
@@ -168,6 +208,57 @@ defmodule Hass.WebSocket do
       })
       when pid == conn_pid and ref == monitor_ref do
     {:stop, {:websocket_closed, reason}}
+  end
+
+  defp unsubscription_message(sub_id, :trigger) do
+    %{type: :unsubscribe_events, subscription: sub_id}
+  end
+
+  defp apply_response_handler(_id, msg, nil, state) do
+    Logger.warn(fn -> "Unknown handler for message: #{inspect(msg)}" end)
+    state
+  end
+
+  defp apply_response_handler(id, msg, {:command, caller}, state) do
+    send(caller, {:hass, id, handle_command_response(msg)})
+    %{state | handlers: Map.delete(state.handlers, id)}
+  end
+
+  defp apply_response_handler(id, msg, {{:subscribe, kind}, caller}, state) do
+    case handle_command_response(msg) do
+      {:ok, _} ->
+        send(caller, {:hass, id, :subscribed})
+        %{state | handlers: %{state.handlers | id => {{:subscription, kind}, caller}}}
+
+      {:error, _} = error ->
+        send(caller, {:hass, id, error})
+        %{state | handlers: Map.delete(state.handlers, id)}
+    end
+  end
+
+  defp apply_response_handler(id, msg, {{:subscription, :trigger}, caller}, state) do
+    response =
+      case msg do
+        %{"type" => "event", "event" => %{"variables" => %{"trigger" => trigger}}} ->
+          {:trigger, trigger}
+
+        _ ->
+          {:error, {:malformed_response, msg}}
+      end
+
+    send(caller, {:hass, id, response})
+    state
+  end
+
+  defp apply_response_handler(id, msg, {{:unsubscribe, sub_id}, caller}, state) do
+    response =
+      case handle_command_response(msg) do
+        {:ok, _} -> :unsubscribed
+        {:error, _} = error -> error
+      end
+
+    send(caller, {:hass, id, response})
+    %{state | handlers: Map.drop(state.handlers, [id, sub_id])}
   end
 
   defp handle_command_response(msg) do
