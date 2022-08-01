@@ -30,6 +30,8 @@ defmodule Hass do
   ws_call(:subscribe_trigger, [trigger])
   ws_call(:unsubscribe, [sub_id])
 
+  defdelegate get_state(endpoint), to: Hass.Rest
+
   #############################################################################
   ## GenServer callbacks
 
