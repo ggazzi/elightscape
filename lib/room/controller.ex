@@ -102,7 +102,7 @@ defmodule Room.Controller do
 
     Task.start(fn ->
       {:ok, _} =
-        Hass.Connection.call_service(state.hass, :scene, :turn_on, target: %{entity_id: scene})
+        Hass.call_service(state.hass, :scene, :turn_on, target: %{entity_id: scene})
     end)
   end
 

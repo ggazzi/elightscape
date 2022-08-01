@@ -9,7 +9,7 @@ defmodule Elightscape.Supervisor do
   @impl true
   def init(config) do
     children = [
-      {Hass.Connection, [config[:hass], name: :hass]},
+      {Hass, [name: :hass]},
       Supervisor.child_spec(
         {Room.Controller,
          [
