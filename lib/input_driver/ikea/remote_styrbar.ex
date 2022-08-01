@@ -23,8 +23,8 @@ defmodule InputDriver.Ikea.RemoteStyrbar do
       "arrow_left_click" -> {:arrow_left, :click}
       "arrow_left_hold" -> {:arrow_left, :hold}
       "arrow_left_release" -> {:arrow_left, :release}
-      "brightness_move_up" -> {:brightness_up, :hold}
-      "brightness_move_down" -> {:brightness_down, :hold}
+      "brightness_move_up" -> {{:brightness, :up}, :hold}
+      "brightness_move_down" -> {{:brightness, :down}, :hold}
       "brightness_stop" -> :release
     end
   end

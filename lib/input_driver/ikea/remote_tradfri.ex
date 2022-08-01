@@ -23,12 +23,12 @@ defmodule InputDriver.Ikea.RemoteTradfri do
       "arrow_left_click" -> {:arrow_left, :click}
       "arrow_left_hold" -> {:arrow_left, :hold}
       "arrow_left_release" -> {:arrow_left, :release}
-      "brightness_up_click" -> {:brightness_up, :click}
-      "brightness_up_hold" -> {:brightness_up, :hold}
-      "brightness_up_release" -> {:brightness_up, :release}
-      "brightness_down_click" -> {:brightness_down, :click}
-      "brightness_down_hold" -> {:brightness_down, :hold}
-      "brightness_down_release" -> {:brightness_down, :release}
+      "brightness_up_click" -> {{:brightness, :up}, :click}
+      "brightness_up_hold" -> {{:brightness, :up}, :hold}
+      "brightness_up_release" -> {{:brightness, :up}, :release}
+      "brightness_down_click" -> {{:brightness, :down}, :click}
+      "brightness_down_hold" -> {{:brightness, :down}, :hold}
+      "brightness_down_release" -> {{:brightness, :down}, :release}
     end
   end
 end
