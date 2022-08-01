@@ -3,11 +3,13 @@ defmodule Room.StateMachineTest do
   import Room.StateMachine
   doctest Room.StateMachine
 
-  @sensor_timeout 6
-  @recv_timeout 1
+  @effect_timeout 10
+  @effect_timeout_margin 5
+  @recv_timeout 3
 
   setup do
-    {:ok, pid} = start_link([self(), [sensor_timeout: @sensor_timeout - 2]])
+    effect_timeout = @effect_timeout - @effect_timeout_margin
+    {:ok, pid} = start_link([self(), [sensor_timeout: effect_timeout]])
     %{machine: pid}
   end
 
@@ -51,7 +53,7 @@ defmodule Room.StateMachineTest do
     test "turns the lights on ignoring the sensor", %{machine: machine} do
       send_event(machine, {:toggle, :click, 2})
       assert_effect({:set_lights, true})
-      refute_effect({:set_lights, false}, @sensor_timeout)
+      refute_effect({:set_lights, false}, @effect_timeout)
     end
 
     test "turns the sensor off even if lights were already on", %{machine: machine} do
@@ -59,7 +61,7 @@ defmodule Room.StateMachineTest do
       assert_effect({:set_lights, true})
 
       send_event(machine, {:toggle, :click, 2})
-      refute_effect({:set_lights, _}, @sensor_timeout)
+      refute_effect({:set_lights, _}, @effect_timeout)
     end
 
     test "is idempotent", %{machine: machine} do
@@ -112,7 +114,7 @@ defmodule Room.StateMachineTest do
     test "turns the lights on and listens to the sensor", %{machine: machine} do
       send_event(machine, {:on, :click, 1})
       assert_effect({:set_lights, true})
-      assert_effect({:set_lights, false}, @sensor_timeout)
+      assert_effect({:set_lights, false}, @effect_timeout)
     end
 
     test "is idempotent", %{machine: machine} do
@@ -122,7 +124,7 @@ defmodule Room.StateMachineTest do
       send_event(machine, {:on, :click, 1})
       send_event(machine, {:on, :click, 1})
       refute_effect({:set_lights, true})
-      assert_effect({:set_lights, false}, @sensor_timeout)
+      assert_effect({:set_lights, false}, @effect_timeout)
     end
 
     test "turns the sensor on even if lights were already on", %{machine: machine} do
@@ -131,7 +133,7 @@ defmodule Room.StateMachineTest do
 
       send_event(machine, {:on, :click, 1})
       refute_effect({:set_lights, true})
-      assert_effect({:set_lights, false}, @sensor_timeout)
+      assert_effect({:set_lights, false}, @effect_timeout)
     end
   end
 
@@ -139,7 +141,7 @@ defmodule Room.StateMachineTest do
     test "turns the lights on ignoring the sensor", %{machine: machine} do
       send_event(machine, {:on, :click, 2})
       assert_effect({:set_lights, true})
-      refute_effect({:set_lights, false}, @sensor_timeout)
+      refute_effect({:set_lights, false}, @effect_timeout)
     end
 
     test "turns the sensor off even if lights were already on", %{machine: machine} do
@@ -147,7 +149,7 @@ defmodule Room.StateMachineTest do
       assert_effect({:set_lights, true})
 
       send_event(machine, {:on, :click, 2})
-      refute_effect({:set_lights, _}, @sensor_timeout)
+      refute_effect({:set_lights, _}, @effect_timeout)
     end
 
     test "is idempotent", %{machine: machine} do
@@ -238,15 +240,15 @@ defmodule Room.StateMachineTest do
     } do
       send_event(machine, {:toggle, :click, 1})
       assert_effect({:set_lights, true})
-      assert_effect({:set_lights, false}, @sensor_timeout)
+      assert_effect({:set_lights, false}, @effect_timeout)
 
       send_event(machine, {:toggle, :click, 1})
       assert_effect({:set_lights, true})
-      assert_effect({:set_lights, false}, @sensor_timeout)
+      assert_effect({:set_lights, false}, @effect_timeout)
 
       send_event(machine, :sensor_active)
       assert_effect({:set_lights, true})
-      assert_effect({:set_lights, false}, @sensor_timeout)
+      assert_effect({:set_lights, false}, @effect_timeout)
     end
 
     test "repeated activations of the sensor before the timeout are idempotent", %{
@@ -254,14 +256,14 @@ defmodule Room.StateMachineTest do
     } do
       send_event(machine, {:toggle, :click, 1})
       assert_effect({:set_lights, true})
-      assert_effect({:set_lights, false}, @sensor_timeout)
+      assert_effect({:set_lights, false}, @effect_timeout)
 
       send_event(machine, :sensor_active)
       assert_effect({:set_lights, true})
 
       send_event(machine, :sensor_active)
       send_event(machine, :sensor_active)
-      assert_effect({:set_lights, false}, @sensor_timeout)
+      assert_effect({:set_lights, false}, @effect_timeout)
     end
   end
 end
