@@ -68,16 +68,18 @@ defmodule Hass.WebSocket do
   #############################################################################
   ## GenServer callbacks
 
-  defstruct [:conn_pid, :stream_ref, :monitor_ref, :last_id, :handlers]
+  defstruct [:conn_pid, :stream_ref, :monitor_ref, :last_id, :handlers, :callers]
 
   @type handler_type :: :command
   @type handler :: {handler_type, pid}
+  @type msg_id :: non_neg_integer()
   @type state :: %__MODULE__{
           conn_pid: pid,
           stream_ref: reference,
           monitor_ref: reference,
-          last_id: non_neg_integer,
-          handlers: %{non_neg_integer => handler}
+          last_id: msg_id,
+          handlers: %{msg_id => handler},
+          callers: %{pid => MapSet.t(msg_id())}
         }
 
   @impl true
@@ -103,7 +105,8 @@ defmodule Hass.WebSocket do
                    stream_ref: stream_ref,
                    monitor_ref: conn_ref,
                    last_id: 0,
-                   handlers: %{}
+                   handlers: %{},
+                   callers: %{}
                  }}
             end
         end
@@ -133,11 +136,12 @@ defmodule Hass.WebSocket do
   @impl true
   def handle_call({:unsubscribe, sub_id}, {caller, _}, state) do
     case state.handlers[sub_id] do
-      {{:subscription, kind}, _subscriber} ->
+      {{:subscription, kind}, subscriber} ->
         {unsub_id, state} =
           send_message_with_handler(
             unsubscription_message(sub_id, kind),
-            {{:unsubscribe, sub_id}, caller},
+            {:unsubscribe, sub_id, subscriber},
+            caller,
             state
           )
 
@@ -149,22 +153,33 @@ defmodule Hass.WebSocket do
   end
 
   def handle_call({hdl_type, msg}, {caller, _}, state) do
-    {id, state} = send_message_with_handler(msg, {hdl_type, caller}, state)
+    {id, state} = send_message_with_handler(msg, hdl_type, caller, state)
     {:reply, id, state}
   end
 
   defp send_message_with_handler(
          msg,
-         handler,
+         hdl_type,
+         caller,
          %{conn_pid: conn_pid, stream_ref: stream_ref} = state
        ) do
     id = state.last_id + 1
+    send_message(conn_pid, stream_ref, id, msg)
+    handlers = Map.put(state.handlers, id, {hdl_type, caller})
+
+    {:ok, callers} =
+      Map.get_and_update(state.callers, caller, fn
+        nil -> {:ok, {Process.monitor(caller), MapSet.new([id])}}
+        {monitor_ref, ids} -> {:ok, {monitor_ref, MapSet.put(ids, id)}}
+      end)
+
+    {id, %{state | last_id: id, handlers: handlers, callers: callers}}
+  end
+
+  defp send_message(conn_pid, stream_ref, id, msg) do
     msg = JSON.encode!(Map.put(msg, :id, id))
     Logger.debug(fn -> "Sending: #{msg}" end)
     :gun.ws_send(conn_pid, stream_ref, {:text, msg})
-
-    handlers = Map.put(state.handlers, id, handler)
-    {id, %{state | last_id: id, handlers: handlers}}
   end
 
   @impl true
@@ -177,6 +192,7 @@ defmodule Hass.WebSocket do
 
     msg = JSON.decode!(data)
     id = msg["id"]
+    Logger.debug(inspect(handlers))
     state = apply_response_handler(id, msg, handlers[id], state)
     {:noreply, state}
   end
@@ -210,6 +226,39 @@ defmodule Hass.WebSocket do
     {:stop, {:websocket_closed, reason}}
   end
 
+  def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
+    {{_, ids}, callers} = Map.pop(state.callers, pid, {nil, []})
+
+    Logger.debug(fn ->
+      "Process #{inspect(pid)} down, discarding its pending handlers: #{ids |> Enum.map(&inspect/1) |> Enum.join(", ")}"
+    end)
+
+    {handlers, last_id} =
+      for id <- ids, reduce: {state.handlers, state.last_id} do
+        {handlers, last_id} ->
+          case Map.pop!(handlers, id) do
+            {{{:subscription, kind}, _}, handlers} ->
+              unsub_id = last_id + 1
+
+              Task.start(fn ->
+                send_message(
+                  state.conn_pid,
+                  state.stream_ref,
+                  unsub_id,
+                  unsubscription_message(id, kind)
+                )
+              end)
+
+              {handlers, unsub_id}
+
+            {_, handlers} ->
+              {handlers, last_id}
+          end
+      end
+
+    {:noreply, %{state | callers: callers, handlers: handlers, last_id: last_id}}
+  end
+
   defp unsubscription_message(sub_id, :trigger) do
     %{type: :unsubscribe_events, subscription: sub_id}
   end
@@ -221,7 +270,7 @@ defmodule Hass.WebSocket do
 
   defp apply_response_handler(id, msg, {:command, caller}, state) do
     send(caller, {:hass, id, handle_command_response(msg)})
-    %{state | handlers: Map.delete(state.handlers, id)}
+    unregister_handler(id, caller, state)
   end
 
   defp apply_response_handler(id, msg, {{:subscribe, kind}, caller}, state) do
@@ -232,7 +281,7 @@ defmodule Hass.WebSocket do
 
       {:error, _} = error ->
         send(caller, {:hass, id, error})
-        %{state | handlers: Map.delete(state.handlers, id)}
+        unregister_handler(id, caller, state)
     end
   end
 
@@ -250,7 +299,7 @@ defmodule Hass.WebSocket do
     state
   end
 
-  defp apply_response_handler(id, msg, {{:unsubscribe, sub_id}, caller}, state) do
+  defp apply_response_handler(id, msg, {{:unsubscribe, sub_id, subscriber}, caller}, state) do
     response =
       case handle_command_response(msg) do
         {:ok, _} -> :unsubscribed
@@ -258,7 +307,23 @@ defmodule Hass.WebSocket do
       end
 
     send(caller, {:hass, id, response})
-    %{state | handlers: Map.drop(state.handlers, [id, sub_id])}
+    unregister_handler(sub_id, subscriber, unregister_handler(id, caller, state))
+  end
+
+  defp unregister_handler(id, caller, %{handlers: handlers, callers: callers} = state) do
+    {_, callers} =
+      Map.get_and_update!(callers, caller, fn {monitor_ref, ids} ->
+        ids = MapSet.delete(ids, id)
+
+        if Enum.empty?(ids) do
+          Process.demonitor(monitor_ref)
+          :pop
+        else
+          {:ok, ids}
+        end
+      end)
+
+    %{state | handlers: Map.delete(handlers, id), callers: callers}
   end
 
   defp handle_command_response(msg) do
