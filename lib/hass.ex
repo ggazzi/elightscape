@@ -1,5 +1,12 @@
 defmodule Hass.UtilMacros do
-  defmacro ws_call(name, params) do
+  defmacro defwscall({name, _attrs, params}) do
+    params =
+      if params == Elixir do
+        []
+      else
+        params
+      end
+
     quote do
       def unquote(name)(hass, unquote_splicing(params)) do
         ws_pid = GenServer.call(hass, :get_ws_pid)
@@ -26,9 +33,9 @@ defmodule Hass do
 
   import Hass.UtilMacros
 
-  ws_call(:call_service, [domain, service, opts])
-  ws_call(:subscribe_trigger, [trigger])
-  ws_call(:unsubscribe, [sub_id])
+  defwscall call_service(domain, service, opts)
+  defwscall subscribe_trigger(trigger)
+  defwscall unsubscribe(sub_id)
 
   defdelegate get_state(endpoint), to: Hass.Rest
 
