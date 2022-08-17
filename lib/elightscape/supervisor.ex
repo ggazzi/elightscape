@@ -7,7 +7,7 @@ defmodule Elightscape.Supervisor do
   end
 
   @impl true
-  def init(config) do
+  def init(_config) do
     children = [
       {Hass, [name: :hass]},
       Supervisor.child_spec(
@@ -16,8 +16,8 @@ defmodule Elightscape.Supervisor do
            :hass,
            :mqtt,
            name: "bedroom",
-           input: {InputDriver.Ikea.RemoteTradfri, ["remote_bedroom"], nil},
-           input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_bedroom_shelves"], nil}
+           input: {InputDriver.Ikea.RemoteTradfri, nil, entity_id: "remote_bedroom"},
+           input: {InputDriver.Ikea.MotionSensorTradfri, nil, entity_id: "motion_bedroom_shelves"}
          }},
         id: :bedroom
       ),
@@ -27,10 +27,10 @@ defmodule Elightscape.Supervisor do
            :hass,
            :mqtt,
            name: "living",
-           input: {InputDriver.Ikea.RemoteTradfri, ["remote_living"], nil},
-           input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_entrance"], nil},
-           input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_dining"], nil},
-           input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_kitchen"], nil}
+           input: {InputDriver.Ikea.RemoteTradfri, nil, entity_id: "remote_living"},
+           input: {InputDriver.Ikea.MotionSensorTradfri, nil, entity_id: "motion_entrance"},
+           input: {InputDriver.Ikea.MotionSensorTradfri, nil, entity_id: "motion_dining"},
+           input: {InputDriver.Ikea.MotionSensorTradfri, nil, entity_id: "motion_kitchen"}
          }},
         id: :living
       ),
@@ -40,8 +40,8 @@ defmodule Elightscape.Supervisor do
            :hass,
            :mqtt,
            name: "bathroom",
-           input: {InputDriver.Ikea.RemoteStyrbar, ["remote_bathroom"], nil},
-           input: {InputDriver.Ikea.MotionSensorTradfri, ["motion_bathroom"], nil}
+           input: {InputDriver.Ikea.RemoteStyrbar, nil, entity_id: "remote_bathroom"},
+           input: {InputDriver.Ikea.MotionSensorTradfri, nil, entity_id: "motion_bathroom"}
          }},
         id: :bathroom
       )

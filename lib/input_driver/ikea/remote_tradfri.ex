@@ -1,18 +1,31 @@
 defmodule InputDriver.Ikea.RemoteTradfri do
-  use InputDriver.MqttButtons, click_cooldown: 200, fire_click_immediately: false
+  use InputDriver.MqttButtons,
+    click_cooldown: 200,
+    fire_click_immediately: false,
+    payload_type: :string
+
+  require Logger
 
   ## Client API
 
-  def start([mqtt, subscriber, entity_id | opts]) do
-    GenServer.start(__MODULE__, {mqtt, subscriber, entity_id}, opts)
+  def start(opts) do
+    InputDriver.MqttButtons.start(__MODULE__, opts)
   end
 
-  def start_link([mqtt, subscriber, entity_id | opts]) do
-    GenServer.start_link(__MODULE__, {mqtt, subscriber, entity_id}, opts)
+  def start_link(opts) do
+    InputDriver.MqttButtons.start_link(__MODULE__, opts)
   end
 
   ## GenServer Callbacks
 
+  def child_spec(opts) do
+    # FIXME: remove hardcoded MQTT topic prefix
+    opts = Keyword.put(opts, :topic, "zigbee/#{opts[:entity_id]}/action")
+    InputDriver.MqttButtons.child_spec(__MODULE__, opts)
+  end
+
+  @impl InputDriver.MqttButtons
+  @spec decode_action(String.t()) :: InputDriver.MqttButtons.action()
   def decode_action(action) do
     case action do
       "toggle" -> {:toggle, :click}

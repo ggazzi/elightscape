@@ -4,6 +4,7 @@ digraph {
     Controller [label = "Room.Controller";];
     DynamicSupervisor;
     StateMachine [label = "Room.StateMachine";];
+    InputDriver [label = "InputDriver.?";style = dashed;];
     Hass [style = dashed;];
 
     subgraph {
@@ -24,5 +25,8 @@ digraph {
         StateMachine -> Controller [label = ":effect";];
 
         Controller -> Hass [label = "{:call_service, :scene}";];
+
+        InputDriver -> Controller [label = ":register";];
+        InputDriver -> Controller [label = "{InputDriver, ...}";];
     }
 }

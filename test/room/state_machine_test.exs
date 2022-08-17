@@ -10,13 +10,14 @@ defmodule Room.StateMachineTest do
   setup do
     effect_timeout = @effect_timeout - @effect_timeout_margin
     {:ok, pid} = start_link([self(), [sensor_timeout: effect_timeout]])
+    assert_receive({Room.StateMachine, :register, ^pid}, @effect_timeout)
     %{machine: pid}
   end
 
   defmacro assert_effect(pattern, timeout \\ @recv_timeout, failure_message \\ nil) do
     quote do
       assert_receive(
-        {Room.StateMachine, unquote(pattern)},
+        {Room.StateMachine, :effect, unquote(pattern)},
         unquote(timeout),
         unquote(failure_message)
       )
@@ -26,7 +27,7 @@ defmodule Room.StateMachineTest do
   defmacro refute_effect(pattern, timeout \\ @recv_timeout, failure_message \\ nil) do
     quote do
       refute_receive(
-        {Room.StateMachine, unquote(pattern)},
+        {Room.StateMachine, :effect, unquote(pattern)},
         unquote(timeout),
         unquote(failure_message)
       )
