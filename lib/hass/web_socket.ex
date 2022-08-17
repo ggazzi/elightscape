@@ -79,7 +79,7 @@ defmodule Hass.WebSocket do
           monitor_ref: reference,
           last_id: msg_id,
           handlers: %{msg_id => handler},
-          callers: %{pid => MapSet.t(msg_id())}
+          callers: %{pid => {reference, MapSet.t(msg_id())}}
         }
 
   @impl true
@@ -319,7 +319,7 @@ defmodule Hass.WebSocket do
           Process.demonitor(monitor_ref)
           :pop
         else
-          {:ok, ids}
+          {:ok, {monitor_ref, ids}}
         end
       end)
 
