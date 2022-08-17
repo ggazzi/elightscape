@@ -48,7 +48,8 @@ defmodule Elightscape.MixProject do
       {:cowlib, "~> 2.11.0",
        env: :prod, hex: "cowlib", repo: "hexpm", optional: false, override: true},
       {:propcheck, "~> 1.4", only: [:test, :dev]},
-      {:ex_doc, "~> 0.27", runtime: false}
+      {:ex_doc, "~> 0.27", only: [:dev], runtime: false},
+      {:dialyxir, "~> 1.0", only: [:dev], runtime: false}
     ]
   end
 end
