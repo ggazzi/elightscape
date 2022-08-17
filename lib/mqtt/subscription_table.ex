@@ -78,38 +78,38 @@ defmodule Mqtt.SubscriptionTable do
     subscribe(table, subscriber, Topic.parse(filter))
   end
 
+  @spec contains_filter?(t, Topic.filter()) :: boolean
   def contains_filter?(table, %{fragments: filter}) do
-    contains_filter?(table, filter)
+    contains_filter_impl(table, filter)
   end
 
-  def contains_filter?(table, []) do
+  @spec contains_filter_impl(t, list(Topic.filter_fragment())) :: boolean
+  defp contains_filter_impl(table, []) do
     not Enum.empty?(table.exact)
   end
 
-  def contains_filter?(table, [:any_deep]) do
+  defp contains_filter_impl(table, [:any_deep]) do
     not Enum.empty?(table.any_deep)
   end
 
-  def contains_filter?(table, [curr | rest]) when curr != :any_deep do
+  defp contains_filter_impl(table, [curr | rest]) when curr != :any_deep do
     case table.children[curr] do
       nil ->
         false
 
       subtable ->
-        contains_filter?(subtable, rest)
+        contains_filter_impl(subtable, rest)
     end
   end
 
-  def contains_filter(table, filter) when is_binary(filter) do
-    contains_filter?(table, Topic.parse(filter))
-  end
-
-  @spec subscribed_filters(t) :: MapSet.t(Schema.t())
+  @spec subscribed_filters(t) :: MapSet.t(Topic.filter())
   def subscribed_filters(table) do
     subscribed_filters(MapSet.new(), [], table)
   end
 
-  def subscribed_filters(filters, prefix, table) do
+  @spec subscribed_filters(acc, list(Topic.filter_fragment()), t) :: acc
+        when acc: MapSet.t(Topic.filter())
+  defp subscribed_filters(filters, prefix, table) do
     filters =
       unless Enum.empty?(table.exact) do
         MapSet.put(filters, Topic.new(prefix))
@@ -129,39 +129,41 @@ defmodule Mqtt.SubscriptionTable do
     end
   end
 
+  @spec unsubscribe(t, pid, Topic.filter()) :: t
   def unsubscribe(table, subscriber, %{fragments: filter}) do
-    unsubscribe(table, subscriber, filter)
+    unsubscribe_impl(table, subscriber, filter)
   end
 
-  def unsubscribe(table, subscriber, []) do
+  @spec unsubscribe_impl(t, pid, list(Topic.filter_fragment())) :: t
+  defp unsubscribe_impl(table, subscriber, []) do
     %{table | exact: MapSet.delete(table.exact, subscriber)}
   end
 
-  def unsubscribe(table, subscriber, [:any_deep]) do
+  defp unsubscribe_impl(table, subscriber, [:any_deep]) do
     %{table | any_deep: MapSet.delete(table.any_deep, subscriber)}
   end
 
-  def unsubscribe(table, subscriber, [fragment | rest]) do
-    subtable =
-      case Map.get(table.children, fragment) do
-        nil -> nil
-        subtable -> unsubscribe(subtable, subscriber, rest)
-      end
+  defp unsubscribe_impl(table, subscriber, [fragment | rest]) do
+    {children_changed, new_children} =
+      Map.get_and_update(table.children, fragment, fn
+        nil ->
+          :pop
 
-    cond do
-      subtable == nil ->
-        table
+        subtable ->
+          subtable = unsubscribe_impl(subtable, subscriber, rest)
 
-      Enum.empty?(subtable) ->
-        %{table | children: Map.delete(table.children, fragment)}
+          if Enum.empty?(subtable) do
+            {true, subtable}
+          else
+            :pop
+          end
+      end)
 
-      true ->
-        %{table | children: %{table.children | fragment => subtable}}
+    if children_changed do
+      %{table | children: new_children}
+    else
+      table
     end
-  end
-
-  def unsubscribe(table, subscriber, filter) when is_binary(filter) do
-    unsubscribe(table, subscriber, Topic.parse(filter))
   end
 
   defimpl Collectable do

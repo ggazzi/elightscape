@@ -26,11 +26,21 @@ defmodule Mqtt do
 
   ## Connection Callbacks
 
+  defstruct [:config, :subscriptions, :subscribers, :conn_pid]
+
+  @type config :: term
+  @type state :: %__MODULE__{
+          config: config,
+          subscriptions: Table.t(),
+          subscribers: %{pid => {reference, MapSet.t(String.t())}},
+          conn_pid: nil | pid
+        }
+
   @impl true
   def init(config) do
     Logger.debug("init")
 
-    state = %{
+    state = %__MODULE__{
       config: config,
       subscriptions: Table.new(),
       subscribers: %{},
@@ -96,14 +106,17 @@ defmodule Mqtt do
   end
 
   @impl true
+  @spec disconnect(term, state) :: {:connect, :reconnect, state}
   def disconnect(_info, %{conn_pid: conn_pid} = state) do
     :emqtt.disconnect(conn_pid)
     {:connect, :reconnect, %{state | conn_pid: nil}}
   end
 
   @impl true
+  @spec handle_info(term, state) :: {:connect, term, state}
   def handle_info({:disconnect, reason_code, props}, state) do
     {:connect, {:mqtt_disconnected, reason_code, props}, %{state | conn_pid: nil}}
+    nil
   end
 
   def handle_info({:DOWN, _ref, :process, pid, reason}, %{conn_pid: conn_pid} = state)
@@ -111,7 +124,6 @@ defmodule Mqtt do
     {:connect, {:emqtt_down, reason}, %{state | conn_pid: nil}}
   end
 
-  @impl true
   def handle_info(
         {:publish, %{topic: topic, payload: payload}},
         %{subscriptions: subscriptions} = state
@@ -144,14 +156,15 @@ defmodule Mqtt do
 
       {_ref, filters} ->
         {subscriptions, to_unsubscribe} =
-          for filter <- filters, reduce: {subscriptions, []} do
+          for raw_filter <- filters, reduce: {subscriptions, []} do
             {subs, unsubs} ->
+              filter = Topic.parse(raw_filter)
               subs = Table.unsubscribe(subs, pid, filter)
 
               # Collect filters that no longer have any subscriber
               unsubs =
                 if not Table.contains_filter?(subs, filter),
-                  do: [Topic.to_string(filter) | unsubs],
+                  do: [raw_filter | unsubs],
                   else: unsubs
 
               {subs, unsubs}
@@ -164,6 +177,7 @@ defmodule Mqtt do
     end
   end
 
+  @spec handle_call(term, GenServer.from(), state) :: {:reply, :ok, state}
   @impl true
   def handle_call(
         {:subscribe, filter},
@@ -191,18 +205,17 @@ defmodule Mqtt do
     end
   end
 
-  @impl true
   def handle_call(
-        {:unsubscribe, filter},
+        {:unsubscribe, raw_filter},
         {from, _id},
         %{subscriptions: subscriptions, subscribers: subscribers} = state
       ) do
-    parsed_filter = Topic.parse(filter)
+    filter = Topic.parse(raw_filter)
     subscriptions = Table.unsubscribe(subscriptions, from, filter)
 
     # Unsubscribe to schema if no other subscribers are left
-    unless Table.contains_filter?(subscriptions, parsed_filter) do
-      Task.start(fn -> :emqtt.unsubscribe(state.conn_pid, %{}, [filter]) end)
+    unless Table.contains_filter?(subscriptions, filter) do
+      Task.start(fn -> :emqtt.unsubscribe(state.conn_pid, %{}, [raw_filter]) end)
     end
 
     # Deregister subscriber if no other subscriptions are left
@@ -212,7 +225,7 @@ defmodule Mqtt do
           subscribers
 
         {ref, filters} ->
-          filters = MapSet.delete(filters, filter)
+          filters = MapSet.delete(filters, raw_filter)
 
           if Enum.empty?(filters) do
             Process.demonitor(ref)
