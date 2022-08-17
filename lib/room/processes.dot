@@ -1,0 +1,28 @@
+digraph {
+    node [shape = rect;];
+    RoomSupervisor [label = "Room.Supervisor";];
+    Controller [label = "Room.Controller";];
+    DynamicSupervisor;
+    StateMachine [label = "Room.StateMachine";];
+    Hass [style = dashed;];
+
+    subgraph {
+        // Links
+        edge [dir = none;];
+        RoomSupervisor -> Controller;
+        RoomSupervisor -> DynamicSupervisor;
+        DynamicSupervisor -> StateMachine;
+        DynamicSupervisor -> InputDriver [headlabel = "*";];
+    }
+
+    subgraph {
+        // Messages
+        edge [style = dashed;];
+
+        Controller -> StateMachine [label = ":event"; constraint = false;];
+        StateMachine -> Controller [label = ":register";];
+        StateMachine -> Controller [label = ":effect";];
+
+        Controller -> Hass [label = "{:call_service, :scene}";];
+    }
+}

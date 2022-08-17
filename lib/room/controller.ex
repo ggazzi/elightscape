@@ -5,9 +5,10 @@ defmodule Room.Controller do
   defmodule Supervisor do
     use Elixir.Supervisor
 
-    @spec start_link({any, any, keyword}) :: :ignore | {:error, any} | {:ok, pid}
     def start_link({_, _, config} = init_arg) do
-      Supervisor.start_link(__MODULE__, init_arg, name: :"Room.#{Keyword.get(config, :name)}")
+      Supervisor.start_link(__MODULE__, init_arg,
+        name: :"Room.#{Keyword.get(config, :name)}.Supervisor"
+      )
     end
 
     @impl true
@@ -18,7 +19,7 @@ defmodule Room.Controller do
       children = [
         {DynamicSupervisor, name: supervisor_name, strategy: :one_for_one},
         {Room.Controller,
-         [hass, mqtt, supervisor_name, config, name: :"Room.#{room_name}.Controller"]}
+         [{hass, mqtt, supervisor_name, config}, name: :"Room.#{room_name}.Controller"]}
       ]
 
       # If either the controller or the supervisor die, the other one cannot work anymore
@@ -28,12 +29,12 @@ defmodule Room.Controller do
 
   ## Client API
 
-  def start([hass, mqtt, supervisor, config | opts]) do
-    GenServer.start(__MODULE__, {hass, mqtt, supervisor, config}, opts)
+  def start([init_args | opts]) do
+    GenServer.start(__MODULE__, init_args, opts)
   end
 
-  def start_link([hass, mqtt, supervisor, config | opts]) do
-    GenServer.start_link(__MODULE__, {hass, mqtt, supervisor, config}, opts)
+  def start_link([init_args | opts]) do
+    GenServer.start_link(__MODULE__, init_args, opts)
   end
 
   ## Server Callbacks
@@ -124,7 +125,7 @@ defmodule Room.Controller do
     end
   end
 
-  defp handle_response({:set_lights, on}, state) do
+  defp handle_effect({:set_lights, on}, state) do
     scene =
       if on do
         state.scene_on
@@ -133,12 +134,7 @@ defmodule Room.Controller do
       end
 
     Task.start(fn ->
-      {:ok, _} =
-        Hass.call_service(state.hass, :scene, :turn_on, target: %{entity_id: scene})
+      {:ok, _} = Hass.call_service(state.hass, :scene, :turn_on, target: %{entity_id: scene})
     end)
-  end
-
-  defp handle_response(nil, _state) do
-    nil
   end
 end
