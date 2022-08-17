@@ -13,7 +13,14 @@ defmodule Elightscape.MixProject do
           :test -> ["lib", "test/utils"]
           :dev -> ["lib", "test/utils"]
           _ -> ["lib"]
-        end
+        end,
+
+      # Docs
+      name: "Elightscape",
+      source_url: "https://github.com/ggazzi/elightscape",
+      docs: [
+        main: "Elightscape"
+      ]
     ]
   end
 
@@ -40,7 +47,8 @@ defmodule Elightscape.MixProject do
       {:emqtt, github: "emqx/emqtt", tag: "1.6.0"},
       {:cowlib, "~> 2.11.0",
        env: :prod, hex: "cowlib", repo: "hexpm", optional: false, override: true},
-      {:propcheck, "~> 1.4", only: [:test, :dev]}
+      {:propcheck, "~> 1.4", only: [:test, :dev]},
+      {:ex_doc, "~> 0.27", runtime: false}
     ]
   end
 end

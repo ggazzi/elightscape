@@ -28,6 +28,7 @@ defmodule Room.StateMachine do
     }
 
     state = %{lights_on: false, listening_to_sensor: false}
+    send(controller, {__MODULE__, :register, self()})
 
     {:ok, {config, state}}
   end
@@ -40,7 +41,7 @@ defmodule Room.StateMachine do
     Logger.info(fn -> "#{inspect(effects)} -> #{inspect(new_state)}" end)
 
     if effects != nil do
-      send(config.controller, {__MODULE__, effects})
+      send(config.controller, {__MODULE__, :effect, effects})
     end
 
     case determine_timeout(config, new_state) do

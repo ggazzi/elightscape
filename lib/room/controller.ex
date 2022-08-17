@@ -2,22 +2,50 @@ defmodule Room.Controller do
   use GenServer
   require Logger
 
-  ## Client API
+  defmodule Supervisor do
+    use Elixir.Supervisor
 
-  def start([hass, mqtt, config | opts]) do
-    GenServer.start(__MODULE__, {hass, mqtt, config}, opts)
+    @spec start_link({any, any, keyword}) :: :ignore | {:error, any} | {:ok, pid}
+    def start_link({_, _, config} = init_arg) do
+      Supervisor.start_link(__MODULE__, init_arg, name: :"Room.#{Keyword.get(config, :name)}")
+    end
+
+    @impl true
+    def init({hass, mqtt, config}) do
+      room_name = Keyword.get(config, :name)
+      supervisor_name = :"Room.#{room_name}.DynamicSupervisor"
+
+      children = [
+        {DynamicSupervisor, name: supervisor_name, strategy: :one_for_one},
+        {Room.Controller,
+         [hass, mqtt, supervisor_name, config, name: :"Room.#{room_name}.Controller"]}
+      ]
+
+      # If either the controller or the supervisor die, the other one cannot work anymore
+      Supervisor.init(children, strategy: :one_for_all)
+    end
   end
 
-  def start_link([hass, mqtt, config | opts]) do
-    GenServer.start_link(__MODULE__, {hass, mqtt, config}, opts)
+  ## Client API
+
+  def start([hass, mqtt, supervisor, config | opts]) do
+    GenServer.start(__MODULE__, {hass, mqtt, supervisor, config}, opts)
+  end
+
+  def start_link([hass, mqtt, supervisor, config | opts]) do
+    GenServer.start_link(__MODULE__, {hass, mqtt, supervisor, config}, opts)
   end
 
   ## Server Callbacks
 
-  def init({hass, mqtt, config}) do
-    {:ok, machine} = Room.StateMachine.start_link([self(), config])
-
+  def init({hass, mqtt, supervisor, config}) do
     name = config[:name]
+
+    {:ok, machine} =
+      DynamicSupervisor.start_child(
+        supervisor,
+        {Room.StateMachine, [self(), config, name: :"Room.#{name}.StateMachine"]}
+      )
 
     triggers =
       for {:input, {module, opts, handler}} <- config, into: %{} do
@@ -57,8 +85,12 @@ defmodule Room.Controller do
     {pid, ref}
   end
 
-  def handle_info({Room.StateMachine, response}, state) do
-    handle_response(response, state)
+  def handle_info({Room.StateMachine, :register, machine}, state) do
+    {:noreply, %{state | machine: machine}}
+  end
+
+  def handle_info({Room.StateMachine, :effect, effect}, state) do
+    handle_effect(effect, state)
     {:noreply, state}
   end
 
