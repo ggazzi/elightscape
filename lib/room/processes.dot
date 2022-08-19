@@ -4,6 +4,7 @@ digraph {
     Controller [label = "Room.Controller";];
     DynamicSupervisor;
     StateMachine [label = "Room.StateMachine";];
+    Light [label = "Room.Light";];
     InputDriver [label = "InputDriver.?";style = dashed;];
     Hass [style = dashed;];
 
@@ -13,6 +14,7 @@ digraph {
         RoomSupervisor -> Controller;
         RoomSupervisor -> DynamicSupervisor;
         DynamicSupervisor -> StateMachine;
+        DynamicSupervisor -> Light [headlabel = "*";];
         DynamicSupervisor -> InputDriver [headlabel = "*";];
     }
 
@@ -25,6 +27,14 @@ digraph {
         StateMachine -> Controller [label = ":effect";];
 
         Controller -> Hass [label = "{:call_service, :scene}";];
+
+        Light -> Controller [label = ":register";];
+        Controller -> Light [label = "{:set_on, bool}";];
+        Light -> Controller [label = "{:turned_on, bool}";];
+
+        Light -> Hass [label = ":subscribe_trigger";];
+        Hass -> Light [label = ":trigger";];
+        Light -> Hass [label = "{:call_service, :light}";];
 
         InputDriver -> Controller [label = ":register";];
         InputDriver -> Controller [label = "{InputDriver, ...}";];

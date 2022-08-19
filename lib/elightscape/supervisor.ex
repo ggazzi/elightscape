@@ -17,7 +17,10 @@ defmodule Elightscape.Supervisor do
            :mqtt,
            name: "bedroom",
            input: {InputDriver.Ikea.RemoteTradfri, entity_id: "remote_bedroom"},
-           input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_bedroom_shelves"}
+           input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_bedroom_shelves"},
+           light: "light_bedroom_ceiling",
+           light: "light_bedroom_desk",
+           light: "light_bedroom_shelves"
          }},
         id: :bedroom
       ),
@@ -30,7 +33,17 @@ defmodule Elightscape.Supervisor do
            input: {InputDriver.Ikea.RemoteTradfri, entity_id: "remote_living"},
            input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_entrance"},
            input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_dining"},
-           input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_kitchen"}
+           input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_kitchen"},
+           light: "light_kitchen_ceiling",
+           light: "light_kitchen_spot",
+           light: "light_living_floor",
+           light: "light_living_spot",
+           light: "light_living_fairy",
+           light: "light_chandelier_1",
+           light: "light_chandelier_2",
+           light: "light_chandelier_3",
+           light: "light_chandelier_4",
+           light: "light_chandelier_5"
          }},
         id: :living
       ),
@@ -41,7 +54,8 @@ defmodule Elightscape.Supervisor do
            :mqtt,
            name: "bathroom",
            input: {InputDriver.Ikea.RemoteStyrbar, entity_id: "remote_bathroom"},
-           input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_bathroom"}
+           input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_bathroom"},
+           light: "light_bedroom_ceiling"
          }},
         id: :bathroom
       )

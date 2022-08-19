@@ -48,6 +48,10 @@ defmodule Room.Controller do
         {Room.StateMachine, [self(), config, name: :"Room.#{name}.StateMachine"]}
       )
 
+    for {:light, entity_id} <- config do
+      DynamicSupervisor.start_child(supervisor, {Room.Light, [hass, self(), entity_id]})
+    end
+
     for {:input, {module, opts}} <- config do
       DynamicSupervisor.start_child(
         supervisor,
@@ -59,6 +63,7 @@ defmodule Room.Controller do
      %{
        machine: machine,
        input_drivers: %{},
+       lights: MapSet.new(),
        hass: hass,
        mqtt: mqtt,
        scene_on: "scene.#{name}_high_night",
@@ -72,6 +77,18 @@ defmodule Room.Controller do
 
   def handle_info({Room.StateMachine, :effect, effect}, state) do
     handle_effect(effect, state)
+    {:noreply, state}
+  end
+
+  def handle_info({Room.Light, :register, pid}, %{lights: lights} = state) do
+    # We don't need to store the monitor ref, as we will not stop monitoring the light process
+    Process.monitor(pid)
+    lights = MapSet.put(lights, pid)
+    {:noreply, %{state | lights: lights}}
+  end
+
+  def handle_info({Room.Light, entity_id, :turned_on, on?}, state) do
+    Room.StateMachine.send_event(state.machine, {:turned_on, entity_id, on?})
     {:noreply, state}
   end
 
@@ -94,10 +111,16 @@ defmodule Room.Controller do
     end
   end
 
-  def handle_info({:DOWN, _ref, :process, pid, _reason}, %{input_drivers: input_drivers} = state) do
+  def handle_info(
+        {:DOWN, _ref, :process, pid, _reason},
+        %{input_drivers: input_drivers, lights: lights} = state
+      ) do
     cond do
       input_drivers[pid] ->
         {:noreply, %{state | input_drivers: Map.delete(input_drivers, pid)}}
+
+      MapSet.member?(lights, pid) ->
+        {:noreply, %{state | lights: MapSet.delete(lights, pid)}}
     end
   end
 
@@ -112,5 +135,11 @@ defmodule Room.Controller do
     Task.start(fn ->
       {:ok, _} = Hass.call_service(state.hass, :scene, :turn_on, target: %{entity_id: scene})
     end)
+  end
+
+  defp handle_effect(:commit_lights, state) do
+    for light <- state.lights do
+      Room.Light.commit_if_temporarily_off(light)
+    end
   end
 end

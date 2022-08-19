@@ -20,6 +20,8 @@ defmodule Room.StateMachine do
 
   @default_sensor_timeout 5 * 60 * 1000
 
+  defstruct [:lights_on, :listening_to_sensor, num_lights_on: 0]
+
   @impl true
   def init({controller, config}) do
     config = %{
@@ -27,7 +29,7 @@ defmodule Room.StateMachine do
       sensor_timeout: Keyword.get(config, :sensor_timeout, @default_sensor_timeout)
     }
 
-    state = %{lights_on: false, listening_to_sensor: false}
+    state = %__MODULE__{lights_on: false, listening_to_sensor: false}
     send(controller, {__MODULE__, :register, self()})
 
     {:ok, {config, state}}
@@ -66,7 +68,16 @@ defmodule Room.StateMachine do
   """
   def determine_effects(_config, curr, next) do
     if curr.lights_on != next.lights_on do
-      {:set_lights, next.lights_on}
+      cond do
+        curr.num_lights_on == next.num_lights_on ->
+          {:set_lights, next.lights_on}
+
+        next.lights_on ->
+          :commit_lights
+
+        true ->
+          nil
+      end
     end
   end
 
@@ -147,6 +158,34 @@ defmodule Room.StateMachine do
       %{state | lights_on: false}
     else
       state
+    end
+  end
+
+  def react_to_event({:turned_on, _entity_id, on?}, %{num_lights_on: num_lights_on} = state) do
+    num_lights_on = num_lights_on + if on?, do: 1, else: -1
+    Logger.info("num_lights_on=#{num_lights_on}")
+
+    cond do
+      num_lights_on < 0 ->
+        raise "Number of lights turned on became negative"
+
+      num_lights_on == 0 ->
+        Logger.info("turning off")
+
+        %{
+          state
+          | num_lights_on: 0,
+            lights_on: false,
+            listening_to_sensor: not state.lights_on and state.listening_to_sensor
+        }
+
+      true ->
+        %{
+          state
+          | num_lights_on: num_lights_on,
+            lights_on: true,
+            listening_to_sensor: state.listening_to_sensor or not state.lights_on
+        }
     end
   end
 
