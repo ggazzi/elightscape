@@ -20,14 +20,20 @@ defmodule Room.StateMachine do
 
   @default_sensor_timeout 5 * 60 * 1000
 
+  @default_brightness_step 5
+  @default_brightness_step_timeout 200
+
   @impl true
   def init({controller, config}) do
     config = %{
       controller: controller,
-      sensor_timeout: Keyword.get(config, :sensor_timeout, @default_sensor_timeout)
+      sensor_timeout: Keyword.get(config, :sensor_timeout, @default_sensor_timeout),
+      brightness_step: Keyword.get(config, :brightness_step, @default_brightness_step),
+      brightness_step_timeout:
+        Keyword.get(config, :brightness_step_timeout, @default_brightness_step_timeout)
     }
 
-    state = %{lights_on: false, listening_to_sensor: false}
+    state = %{lights_on: false, listening_to_sensor: false, changing_brightness: nil}
     send(controller, {__MODULE__, :register, self()})
 
     {:ok, {config, state}}
@@ -64,9 +70,20 @@ defmodule Room.StateMachine do
   These effects should be sent to the controller, which will interpret them.
   If no effects are necessary, produces `nil`.
   """
-  def determine_effects(_config, curr, next) do
-    if curr.lights_on != next.lights_on do
-      {:set_lights, next.lights_on}
+  def determine_effects(config, curr, next) do
+    cond do
+      curr.lights_on != next.lights_on ->
+        {:set_lights, next.lights_on}
+
+      next.changing_brightness ->
+        {:change_brightness,
+         case next.changing_brightness do
+           :up -> config.brightness_step
+           :down -> -config.brightness_step
+         end}
+
+      true ->
+        nil
     end
   end
 
@@ -81,12 +98,20 @@ defmodule Room.StateMachine do
         config,
         %{
           lights_on: lights_on,
-          listening_to_sensor: listening_to_sensor
+          listening_to_sensor: listening_to_sensor,
+          changing_brightness: changing_brightness
         } = _state
       ) do
-    if lights_on and listening_to_sensor do
-      # Any event will reset the sensor timeout
-      {config.sensor_timeout, :sensor_timeout}
+    cond do
+      changing_brightness ->
+        {config.brightness_step_timeout, :brightness_step}
+
+      lights_on and listening_to_sensor ->
+        # Any event will reset the sensor timeout
+        {config.sensor_timeout, :sensor_timeout}
+
+      true ->
+        nil
     end
   end
 
@@ -148,6 +173,23 @@ defmodule Room.StateMachine do
     else
       state
     end
+  end
+
+  def react_to_event(:brightness_step, state) do
+    state
+  end
+
+  def react_to_event({{:brightness, direction}, :hold}, state) do
+    if state.lights_on do
+      %{state | changing_brightness: direction}
+    else
+      state
+    end
+  end
+
+  def react_to_event({{:brightness, direction}, :release}, state)
+      when state.changing_brightness == direction do
+    %{state | changing_brightness: nil}
   end
 
   def react_to_event(unknown, state) do

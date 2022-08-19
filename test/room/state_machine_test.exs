@@ -9,8 +9,15 @@ defmodule Room.StateMachineTest do
 
   setup do
     effect_timeout = @effect_timeout - @effect_timeout_margin
-    {:ok, pid} = start_link([self(), [sensor_timeout: effect_timeout]])
+
+    {:ok, pid} =
+      start_link([
+        self(),
+        [sensor_timeout: effect_timeout, brightness_step_timeout: effect_timeout]
+      ])
+
     assert_receive({Room.StateMachine, :register, ^pid}, @effect_timeout)
+
     %{machine: pid}
   end
 
@@ -24,11 +31,29 @@ defmodule Room.StateMachineTest do
     end
   end
 
+  defmacro assert_past_effect(pattern, failure_message \\ nil) do
+    quote do
+      assert_received(
+        {Room.StateMachine, unquote(pattern)},
+        unquote(failure_message)
+      )
+    end
+  end
+
   defmacro refute_effect(pattern, timeout \\ @recv_timeout, failure_message \\ nil) do
     quote do
       refute_receive(
         {Room.StateMachine, :effect, unquote(pattern)},
         unquote(timeout),
+        unquote(failure_message)
+      )
+    end
+  end
+
+  defmacro refute_past_effect(pattern, failure_message \\ nil) do
+    quote do
+      refute_received(
+        {Room.StateMachine, unquote(pattern)},
         unquote(failure_message)
       )
     end
@@ -265,6 +290,106 @@ defmodule Room.StateMachineTest do
       send_event(machine, :sensor_active)
       send_event(machine, :sensor_active)
       assert_effect({:set_lights, false}, @effect_timeout)
+    end
+  end
+
+  describe "holding `{:brightness, :up}` button:" do
+    test "does nothing when lights are off", %{machine: machine} do
+      send_event(machine, {{:brightness, :up}, :hold})
+      refute_effect({:change_brightness, _}, @effect_timeout)
+    end
+
+    test "immediately starts changing brightness when lights are always-on", %{machine: machine} do
+      send_event(machine, {:on, :click, 2})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {{:brightness, :up}, :hold})
+      assert_effect({:change_brightness, n})
+      assert n > 0
+    end
+
+    test "keeps changing brightness at regular intervals until released when lights are always-on",
+         %{machine: machine} do
+      send_event(machine, {:on, :click, 2})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {{:brightness, :up}, :hold})
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n > 0
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n > 0
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n > 0
+
+      send_event(machine, {{:brightness, :up}, :release})
+      refute_effect({:change_brightness, _}, @effect_timeout)
+    end
+
+    test "works and interrupts the sensor when lights are sensor-on", %{machine: machine} do
+      send_event(machine, {:on, :click, 1})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {{:brightness, :up}, :hold})
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n > 0
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n > 0
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n > 0
+
+      send_event(machine, {{:brightness, :up}, :release})
+      assert_effect({:set_lights, false}, @effect_timeout)
+      refute_past_effect({:change_brightness, _})
+    end
+  end
+
+  describe "holding `{:brightness, :down}` button:" do
+    test "does nothing when lights are off", %{machine: machine} do
+      send_event(machine, {{:brightness, :down}, :hold})
+      refute_effect({:change_brightness, _}, @effect_timeout)
+    end
+
+    test "immediately starts changing brightness when lights are always-on", %{machine: machine} do
+      send_event(machine, {:on, :click, 2})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {{:brightness, :down}, :hold})
+      assert_effect({:change_brightness, n})
+      assert n < 0
+    end
+
+    test "keeps changing brightness at regular intervals until released when lights are always-on",
+         %{machine: machine} do
+      send_event(machine, {:on, :click, 2})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {{:brightness, :down}, :hold})
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n < 0
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n < 0
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n < 0
+
+      send_event(machine, {{:brightness, :down}, :release})
+      refute_effect({:change_brightness, _}, @effect_timeout)
+    end
+
+    test "works and interrupts the sensor when lights are sensor-on", %{machine: machine} do
+      send_event(machine, {:on, :click, 1})
+      assert_effect({:set_lights, true})
+
+      send_event(machine, {{:brightness, :down}, :hold})
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n < 0
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n < 0
+      assert_effect({:change_brightness, n}, @effect_timeout)
+      assert n < 0
+
+      send_event(machine, {{:brightness, :down}, :release})
+      assert_effect({:set_lights, false}, @effect_timeout)
+      refute_past_effect({:change_brightness, _})
     end
   end
 end
