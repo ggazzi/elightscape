@@ -48,11 +48,10 @@ defmodule Room.Controller do
         {Room.StateMachine, [self(), config, name: :"Room.#{name}.StateMachine"]}
       )
 
-    for {:input, {module, handler, opts}} <- config do
+    for {:input, {module, opts}} <- config do
       DynamicSupervisor.start_child(
         supervisor,
-        {module,
-         [hass: hass, mqtt: mqtt, subscriber: self(), handler: prepare_handler(handler)] ++ opts}
+        {module, [hass: hass, mqtt: mqtt, subscriber: self()] ++ opts}
       )
     end
 
@@ -67,29 +66,6 @@ defmodule Room.Controller do
      }}
   end
 
-  defp prepare_handler(handler) do
-    cond do
-      is_function(handler) ->
-        handler
-
-      handler == nil ->
-        fn x -> x end
-
-      true ->
-        fn _ -> handler end
-    end
-  end
-
-  def handle_info(
-        {InputDriver, pid, :register, handler},
-        %{input_drivers: input_drivers} = state
-      ) do
-    # No need to store the ref: we'll never stop monitoring while process is alive
-    Process.monitor(pid)
-    input_drivers = Map.put(input_drivers, pid, handler)
-    {:noreply, %{state | input_drivers: input_drivers}}
-  end
-
   def handle_info({Room.StateMachine, :register, machine}, state) do
     {:noreply, %{state | machine: machine}}
   end
@@ -99,23 +75,30 @@ defmodule Room.Controller do
     {:noreply, state}
   end
 
+  def handle_info({InputDriver, pid, :register}, %{input_drivers: input_drivers} = state) do
+    ref = Process.monitor(pid)
+    input_drivers = Map.put(input_drivers, pid, ref)
+    {:noreply, %{state | input_drivers: input_drivers}}
+  end
+
   def handle_info({InputDriver, pid, event}, state) do
     case state.input_drivers[pid] do
       nil ->
         Logger.warn(fn -> "[#{inspect(pid)}] unknown input driver #{inspect(event)}" end)
         {:noreply, state}
 
-      handler ->
-        message = handler.(event)
-        Room.StateMachine.send_event(state.machine, message)
-        Logger.info(fn -> "[#{inspect(pid)}] #{inspect(message)}" end)
+      _ref ->
+        Room.StateMachine.send_event(state.machine, event)
         Logger.debug(fn -> "[#{inspect(pid)}] #{inspect(event)}" end)
         {:noreply, state}
     end
   end
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, %{input_drivers: input_drivers} = state) do
-    {:noreply, %{state | input_drivers: Map.delete(input_drivers, pid)}}
+    cond do
+      input_drivers[pid] ->
+        {:noreply, %{state | input_drivers: Map.delete(input_drivers, pid)}}
+    end
   end
 
   defp handle_effect({:set_lights, on}, state) do

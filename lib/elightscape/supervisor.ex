@@ -16,8 +16,8 @@ defmodule Elightscape.Supervisor do
            :hass,
            :mqtt,
            name: "bedroom",
-           input: {InputDriver.Ikea.RemoteTradfri, nil, entity_id: "remote_bedroom"},
-           input: {InputDriver.Ikea.MotionSensorTradfri, nil, entity_id: "motion_bedroom_shelves"}
+           input: {InputDriver.Ikea.RemoteTradfri, entity_id: "remote_bedroom"},
+           input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_bedroom_shelves"}
          }},
         id: :bedroom
       ),
@@ -27,10 +27,10 @@ defmodule Elightscape.Supervisor do
            :hass,
            :mqtt,
            name: "living",
-           input: {InputDriver.Ikea.RemoteTradfri, nil, entity_id: "remote_living"},
-           input: {InputDriver.Ikea.MotionSensorTradfri, nil, entity_id: "motion_entrance"},
-           input: {InputDriver.Ikea.MotionSensorTradfri, nil, entity_id: "motion_dining"},
-           input: {InputDriver.Ikea.MotionSensorTradfri, nil, entity_id: "motion_kitchen"}
+           input: {InputDriver.Ikea.RemoteTradfri, entity_id: "remote_living"},
+           input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_entrance"},
+           input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_dining"},
+           input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_kitchen"}
          }},
         id: :living
       ),
@@ -40,8 +40,8 @@ defmodule Elightscape.Supervisor do
            :hass,
            :mqtt,
            name: "bathroom",
-           input: {InputDriver.Ikea.RemoteStyrbar, nil, entity_id: "remote_bathroom"},
-           input: {InputDriver.Ikea.MotionSensorTradfri, nil, entity_id: "motion_bathroom"}
+           input: {InputDriver.Ikea.RemoteStyrbar, entity_id: "remote_bathroom"},
+           input: {InputDriver.Ikea.MotionSensorTradfri, entity_id: "motion_bathroom"}
          }},
         id: :bathroom
       )

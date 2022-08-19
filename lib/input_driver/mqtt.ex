@@ -23,7 +23,7 @@ defmodule InputDriver.Mqtt do
   def start(module, opts) do
     GenServer.start(
       module,
-      {opts[:mqtt], opts[:subscriber], opts[:handler], opts[:topic], opts},
+      {opts[:mqtt], opts[:subscriber], opts[:topic], opts},
       opts
     )
   end
@@ -31,7 +31,7 @@ defmodule InputDriver.Mqtt do
   def start_link(module, opts) do
     GenServer.start_link(
       module,
-      {opts[:mqtt], opts[:subscriber], opts[:handler], opts[:topic], opts},
+      {opts[:mqtt], opts[:subscriber], opts[:topic], opts},
       opts
     )
   end
@@ -63,13 +63,13 @@ defmodule InputDriver.Mqtt do
       @behaviour InputDriver.Mqtt
       @behaviour :gen_server
 
-      def init({mqtt, subscriber, handler, topic, opts}) do
+      def init({mqtt, subscriber, topic, opts}) do
         case Mqtt.subscribe(mqtt, topic) do
           :ok ->
             ref = Process.monitor(mqtt)
             {:ok, inner_state} = init_inner(opts)
 
-            send(subscriber, {InputDriver, self(), :register, handler})
+            send(subscriber, {InputDriver, self(), :register})
 
             {:ok,
              %InputDriver.Mqtt{
